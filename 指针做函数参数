@@ -1,0 +1,15 @@
+#include <stdio.h>
+
+// 用指针修改外部变量
+void change(int *val) {
+    *val = 999;//这是一个函数，作用：接收一个地址，修改该地址的值。void：这个函数不返回值。change：函数名，int *val：参数是一个 int 类型指针。意思是：这个函数要接收一个变量的地址
+}。
+Int main () {
+    int num = 10;
+    printf("修改前 num = %d\n", num);
+
+    change(&num); // 传地址
+    printf("修改后 num = %d\n", num);
+
+    return 0;   返回0;
+}
