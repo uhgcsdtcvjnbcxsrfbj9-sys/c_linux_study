@@ -1,0 +1,66 @@
+#include <stdio.h>//fopen / fclose / fputs / fgets 都在这个头文件里，引入文件操作必需的头文件，：C 语言必须包含头文件才能使用库函数
+#include <string.h>  //这段代码其实没用到 string.h可以删掉，不影响运行
+
+int main() {
+    // 1. 写入文件
+    FILE *fp = fopen("test.txt", "w"); // 只写，不存在则创建
+//这是最核心的函数：fopen
+含义：打开文件
+"test.txt"：要打开的文件名
+"w"：打开模式
+w = write（只写）
+文件不存在 → 自动创建
+文件已存在 → 清空原有内容
+FILE *fp 是什么意思？
+FILE：系统定义的结构体，管理文件信息
+*fp：文件指针
+作用：用来标识、操作这个打开的文件
+原理：打开文件后，系统返回一个指针，后续所有操作都靠这个指针
+    if (fp == NULL) {   //fopen 失败会返回 NULL（权限不足、路径错误、磁盘满等）
+        perror("fopen failed");//perror：打印系统错误信息
+        return -1;  
+    }
+    fputs("Hello, C Language!\n", fp);//函数：fputs作用：把字符串写入文件参数 1：要写入的字符串参数 2：写入哪个文件（靠文件指针）
+    fputs("File operation test.\n", fp);
+    fclose(fp);//函数：fclose（必须写！）作用：关闭文件原理：数据先写入缓冲区fclose 才会真正把数据刷入磁盘不关闭会造成数据丢失、文件占用
+
+    // 2. 读取文件
+    fp = fopen("test.txt", "r"); // 只读
+    if (fp == NULL) {
+        perror("fopen failed");
+        return -1;   
+    }
+    char buf[100];
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+        printf("读取：%s", buf);
+    }
+//核心读取函数：fgets
+作用：从文件里读一行字符串
+参数 1：读到哪里去（buf）
+参数 2：最多读多少字节
+参数 3：从哪个文件读
+循环原理：
+读到内容 → 返回 buf
+读到文件末尾（无内容） → 返回 NULL
+while 循环会一行一行读完整个文件
+    fclose(fp);
+
+    return 0;   
+}
+1. 文件操作四步走（固定套路）
+fopen 打开文件
+判断是否打开成功
+读 / 写文件
+fclose 关闭文件
+2. 文件指针 FILE *fp 是什么？
+你可以把它理解为：
+文件的 “操作句柄”
+所有对文件的操作，都靠这个指针来定位。
+3. 打开模式最重要 3 个
+"r"：只读（文件必须存在）
+"w"：只写（不存在则创建，存在则清空）
+"a"：追加（写在文件末尾）
+4. 为什么必须 fclose？
+释放系统资源
+把缓冲区数据真正写入磁盘
+解除文件占用
