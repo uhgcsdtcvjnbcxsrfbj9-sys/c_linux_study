@@ -1,0 +1,55 @@
+#include <stdio.h>//文件操作函数 fopen fclose fwrite fread 都需要这个头文件。
+#include <stdlib.h>  
+
+typedef struct {
+    int id;
+    char name[20];  
+    float score;   
+} Student;   
+
+int main()  {
+    Student s = {1, "WangWu", 90.5};
+
+    // 写入二进制文件
+    FILE *fp = fopen("student.bin", "wb");//FILE *fp：文件指针，用来操作文件"student.bin"：文件名"wb"：以二进制写入模式打开w = write（写）b = binary（二进制）文件不存在 → 自动创建文件已存在 → 清空重写
+    fwrite(&s, sizeof(Student), 1, fp);
+    fclose(fp);   文件关闭(fp);
+
+    // 读取二进制文件
+    Student read_s;
+    fp = fopen("student.bin", "rb");
+    fread(&read_s, sizeof(Student), 1, fp);&s要写入的数据的地址→ 把结构体 s 的内存数据写出去sizeof(Student)一个结构体的大小→ 每次写 1 个结构体1写几个？→ 写 1 个结构体fp写入到哪个文件
+    fclose(fp);   //必须关闭。关闭后数据才真正写入磁盘释放文件资源
+
+    printf("读取：id=%d, name=%s, score=%.1f\n",
+           read_s.id, read_s.name, read_s.score);
+
+    return 0;   返回0;
+}
+//二进制读写就是把内存里的数据原封不动写到文件。
+什么是二进制读写？
+把内存数据直接拷贝到文件
+把文件数据直接拷贝回内存
+不做任何转换
+速度最快、最安全
+2. 为什么结构体可以直接读写？
+因为结构体在内存里是
+一整块连续数据
+所以可以一次性读写。
+3. 文本文件 vs 二进制文件
+文本文件：人能看懂
+二进制文件：程序能看懂，存结构体最方便
+4. 固定四步万能模板（背住）
+fopen(..., "wb") 打开写
+fwrite(地址, 大小, 个数, fp) 写
+fclose
+fopen(..., "rb") 打开读
+fread(地址, 大小, 个数, fp) 读
+三、终极总结（最直白）
+这段代码做了两件事：
+把一个结构体 直接写入二进制文件
+把二进制文件里的结构体 直接读回来
+核心函数：
+fwrite：写内存数据到文件
+fread：读文件数据到内存
+适合存：结构体、数组、图片、视频、任意数据
