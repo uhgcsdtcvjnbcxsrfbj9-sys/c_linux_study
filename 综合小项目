@@ -10,12 +10,15 @@ typedef struct  {
 } Student; //把多个变量打包成一个新类型 Student结构体在内存中是连续存放的所以可以一次性 fwrite /fread 读写整个结构体
 
 // 保存学生到文件
-void save_students(Student *s, int count) {
-    FILE *fp = fopen("students.dat", "wb");
-    if (fp == NULL) return;
+void save_students(Student *s, int count) {void save_students(Student *s, int count) {
+  // 保存学生信息
+  // 参数：
+  // s：指向学生信息的指
+    FILE *fp = fopen("students.dat", "wb");FILE *fp = fopen("students.dat", "wb");
+    if (fp == NULL) return;如果 fp 为 NULL，则返回。
     fwrite(s, sizeof(Student), count, fp);//s：学生数组首地址sizeof(Student)：一个学生结构体的大小count：要写入多少个学生fp：文件指针
     fclose(fp);   文件关闭(fp);
-    printf("已保存 %d 条学生信息到文件\n", count);
+    printf("已保存 %d 条学生信息到文件\n", count);printf("Saved %d student records to file\n", count);
 }
 //Student *s：接收学生数组的指针
 int count：要保存的学生数量
@@ -24,29 +27,31 @@ wb = 二进制写入模式
 文件不存在 → 创建
 文件存在 → 清空重写
 // 从文件加载学生
-int load_students(Student *s) {
-    FILE *fp = fopen("students.dat", "rb");
-    if (fp == NULL) return 0;
+int load_students(Student *s) {int 加载学生信息(Student *s) {
+    FILE *fp = fopen("students.dat", "rb");FILE *fp = fopen("students.dat", "rb");
+    if (fp == NULL) return 0;如果 fp 为 NULL，则返回 0 。
     int count = fread(s, sizeof(Student), MAX_STUDENT, fp);//从文件读取最多 MAX_STUDENT 个学生读取的数据放到数组 s 中返回值 count = 实际读到的数量
     fclose(fp);   文件关闭(fp);
-    return count;
+    return count;   返回计数;
 }
 
 // 打印学生
-void print_students(Student *s, int count) {
-    printf("\n===== 学生列表 =====\n");
+void print_students(Student *s, int count) {void print_students(Student *s, int count) {
+  for (int i = 0; i < count; i++) {
+    printf("学生
+    printf("\n===== 学生列表 =====\n");printf("\n===== Student List =====\n");
     for (int i = 0; i < count; i++) {
-        printf("ID:%d, 姓名:%s, 分数:%.1f\n",
+        printf("ID:%d, 姓名:%s, 分数:%.1f\n",printf("ID:%d, Name:%s, Score:%.1f\n",
                s[i].id, s[i].name, s[i].score);
     }
 }
 
-int main () {
+int main () {   Int main () {
     // 1. 录入学生
-    Student students[MAX_STUDENT] = {
-        {1, "Zhang", 85.5},
-        {2, "Li", 92.0},
-        {3, "Wang", 78.5}
+    Student students[MAX_STUDENT] = {学生 students[MAX_STUDENT] = {
+        {1, "Zhang", 85.5},   
+        {2, "Li", 92.0},   
+        {3, "Wang", 78.5}   
     };
 
     // 2. 保存到文件
@@ -57,7 +62,13 @@ int main () {
     int load_count = load_students(load_buf);//读取文件内容到 load_buf 数组
 
     // 4. 打印
-    print_students(load_buf, load_count);
+    print_students(load_buf, load_count);打印学生信息（加载缓冲区，加载数量）；
 
-    return 0;   
+    return 0;     
 }
+
+//这段代码做了 4 件事：
+定义结构体学生
+构造 3 个学生数据
+把学生数据写入二进制文件
+从文件读回学生并打印
