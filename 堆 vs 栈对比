@@ -1,20 +1,31 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <stdio.h>//引入输入输出库，用来打印。
+#include <stdlib.h>  //使用 malloc / free 必须加这个头文件。
 
 void func() {
-    int stack_var = 10; // 栈变量：函数结束自动释放
-    int *heap_var = (int *)malloc(sizeof(int));
-    *heap_var = 20;     // 堆变量：必须手动 free
-
+    int stack_var = 10; // 栈变量：函数结束自动释放.存储在栈区（stack）函数结束 → 自动释放不需要手动管理速度快、空间小.函数调用时系统自动分配空间，函数返回时系统立刻回收空间。
+    int *heap_var = (int *)malloc(sizeof(int));//存储在堆区（heap）不会自动释放必须手动调用 free() 释放.空间大、生命周期自己控制
+    *heap_var = 20;
     printf("stack_var = %d (栈)\n", stack_var);
     printf("*heap_var = %d (堆)\n", *heap_var);
 
-    // free(heap_var); // 故意注释，模拟内存泄漏
+    // free(heap_var); // 故意注释，模拟内存泄漏// free(heap_var); // Intentional comment to simulate memory leak
 }
 
 int main() {   Int main() {
-    func();
+    func();   函数();
     // 函数结束后，stack_var 已释放
     // heap_var 指向的内存仍占用（泄漏）
-    return 0;   返回0;
+    return 0;   
 }
+//栈内存（stack）
+//函数内普通变量
+//自动分配、自动释放
+//函数结束就消失
+//速度快
+//不需要手动管理
+//2. 堆内存（heap）
+//使用 malloc 申请
+//手动分配、手动释放
+//函数结束不会消失
+//必须 free 才能释放
+//不 free = 内存泄漏(系统再也无法使用这块内存，这就叫 内存泄漏。)
