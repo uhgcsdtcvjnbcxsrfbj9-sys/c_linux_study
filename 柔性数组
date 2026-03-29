@@ -1,0 +1,38 @@
+#include <stdio.h>   
+#include <stdlib.h>   //知识点：动态内存分配必须包含这个头文件，作用：使用 malloc、free
+#include <string.h>   //作用：使用 strcpy 复制字符串
+
+// 柔性数组：必须是结构体最后一个成员
+typedef struct {   struct {
+    int len;        // 数据长度
+    char data[];    // 柔性数组（不占结构体空间）不占用结构体空间。sizeof(Buffer) = sizeof(int) = 4 字节`Buffer`   “缓冲” 的大小为 `sizeof(int)`   “sizeof (int)”，即 4 字节。作用：用来动态扩展内存，后面跟着一段连续内存
+} Buffer;//
+
+int main () {
+    // 分配：结构体大小 + 数据大小
+    int data_len = 10;
+    Buffer *buf = (Buffer *)malloc(sizeof(Buffer) + data_len * sizeof(char)//申请总大小 = 结构体本身大小 + 柔性数组需要的大小
+    );
+//整段内存连续前面是结构体后面紧跟柔性数组空间
+//(Buffer *)强制类型转换告诉编译器把这段内存当作 Buffer 结构体使用.
+//Buffer：是你自己定义的结构体类型*：代表这是一个指针buf：变量名字（随便起的，叫 p、pb、ptr 都行）合在一起意思就是：buf 是一个指针，它指向一个 Buffer 类型的结构体
+//Buffer *:把这段内存当成 Buffer 结构体来用
+    buf->len = data_len;
+    strcpy(buf->data, "HelloC"); // 写入数据//buf->data 就是柔性数组等价于后面那段连续 char 空间字符串不能直接赋值，必须用 strcpy
+
+    printf("buf->len = %d\n", buf->len);
+    printf("buf->data = %s\n", buf->data);
+
+    free(buf); // 一次 free 即可//因为整个内存是一次 malloc 出来的所以一次 free 就能全部释放不需要分开释放，非常方便
+    buf = NULL;
+
+    return 0;   
+}
+  //柔性数组 = 结构体末尾一个不占空间的数组占位真正空间是你 malloc 时额外加上去的
+   好处：内存连续，访问快只需要 一次 malloc + 一次 free比 “结构体 + 指针” 更简单、更少内存泄漏内核、网络编程、协议包非常常用
+                柔性数组必须是结构体最后一个成员
+柔性数组本身不占结构体空间
+分配时：malloc(sizeof(结构体) + 数组长度)
+内存连续，使用方便
+只需一次 free
+常用于网络协议、数据缓冲区、可变长数据包
