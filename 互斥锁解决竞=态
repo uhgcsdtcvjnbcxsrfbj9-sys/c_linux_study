@@ -1,0 +1,39 @@
+#include <stdio.h>   //：打印 printf。
+#include <stdlib.h>   
+#include <pthread.h>   //线程 + 互斥锁 都需要这个头文件。
+#include <unistd.h>   //这里没用，但不影响。
+
+int count = 0; // 共享资源//全局变量 所有线程都能访问。两个线程都会修改它 → 叫共享资源
+pthread_mutex_t  mutex; // 互斥锁//mutex = 互斥锁作用：不让两个线程同时修改 count。原理：同一时间，只允许一个线程操作共享数据
+
+void* increment(void* arg) {//线程函数固定格式
+    int id = *(int*)arg;  //把地址转成 int 指针，取值拿到线程编号 1 或 2
+    for (int i = 0; i < 10000; i++) {
+        // 加锁
+        pthread_mutex_lock(&mutex);//谁拿到锁，谁才能执行后面代码另一个线程必须等着，直到锁被释放保证同一时间只有一个线程修改 count
+        count++;//如果不加锁，两个线程同时修改，结果会错乱！加锁后，绝对安全
+        // 解锁
+        pthread_mutex_unlock   线程互斥锁解锁(&mutex);
+    }
+    printf("线程 %d 完成，count = %d\n", id, count);
+    pthread_exit(NULL);//thread_exit () = 让当前线程结束运行。我这个线程干完活了，我要退出了！
+}
+
+int main()  {
+    pthread_t tid1, tid2;//pthread_t：线程 ID 类型
+    int arg1 = 1, arg2 = 2;int 类型的 arg1 变量赋值为 1，arg2 变量赋值为 2；
+
+    // 初始化互斥锁
+    pthread_mutex_init(&mutex, NULL);//锁在使用前必须初始化NULL：使用默认属性。不写这行：锁是无效的，加锁会崩溃
+
+    pthread_create(&tid1, NULL   , increment, &arg1);//&tid1：把线程 ID 保存到 tid1，NULL：默认线程属性increment：线程要运行的函数。&arg1 ：传给线程的参数（地址）
+    pthread_create(&tid2, NULL, increment, &arg2);
+
+    pthread_join(tid1, NULL);等待线程 1 结束主线程会卡在这里，不动。NULL：不关心线程返回值
+    pthread_join(tid2, NULL);
+
+    // 销毁互斥锁
+    pthread_mutex_destroy   销毁互斥锁(&mutex);//销毁互斥锁释放系统资源有创建就要有销毁
+  printf("最终 count = %d\n", count); // 应为20000
+    return 0;   ;
+}
