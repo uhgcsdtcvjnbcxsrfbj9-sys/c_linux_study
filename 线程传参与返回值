@@ -1,0 +1,33 @@
+#include <stdio.h>//提供 printf 打印功能。
+#include <stdlib.h>  //提供 malloc、free 动态内存函数。
+#include <pthread.h>   //pthread_create、pthread_join、pthread_exit 这些线程函数都在这里面。
+
+typedef struct {
+    int a;
+    int b;
+} ThreadData;
+//线程函数只能接收 一个参数，如果你想传多个数字进去，必须打包成结构体。
+void* add_thread(void* arg) {
+    ThreadData* data = (ThreadData*)arg;//但 arg 是 void* 类型，编译器不知道它是什么。(ThreadData*)arg：强制转换成 ThreadData 结构体指针。//现在 data 指向主线程的结构体，能访问 a 和 b 了！
+    int* res = malloc(sizeof(int));//因为要把计算结果返回给主线程。栈内存函数结束就销毁，不能返回，必须用堆内存！
+    *res = data->a + data->b;
+    pthread_exit((void*)res); // pthread_exit：退出线程，并返回一个值。(void*)res：把堆内存指针返回给主线程。
+}
+
+int main() {
+    pthread_t tid;//pthread_t：线程 ID 类型。
+    ThreadData data = {10, 20};//创建一个结构体变量，赋值：a = 10。b = 20
+    int* result;//定义一个 int 指针，
+
+    pthread_create(&tid, NULL, add_thread, &data);
+    pthread_join(tid, (void**)&result); // 接收返回值//主线程在这里等着，等子线程跑完再继续，接收子线程返回的结果（30）
+//pthread_join(线程ID, 用来接收返回值的指针的地址);
+//tid。我要等这个线程结束主线程会卡在这里，不动，直到子线程跑完
+//为什么要写 &result？因为 pthread_join 想把返回值放进你的变量里，就必须知道你变量的地址！
+//3. 那为什么要加 (void**)？因为 pthread_join 规定：第二个参数必须是 void 类型的指针的地址 **
+
+    printf("计算结果：%d + %d = %d\n", data.a, data.b, *result);
+    free(result); // 释放堆内存
+    return 0;   
+}
+//void* arg：参数，只能有一个，而且必须是通用指针。主线程传什么地址过来，arg 就接收什么。
