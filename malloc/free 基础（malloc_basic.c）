@@ -7,13 +7,13 @@ int main () {
 //int *p用一个指针 p 保存这块内存的地址
     // 须检查是否分配成功
     if (p == NULL) {
-        printf("malloc failed!\n");
+        printf("malloc failed!\n");printf("malloc failed!\n");
         return -1;  
     }
     // 使用堆内存（像数组一样）
     for (int i = 0; i < 4; i++) {
         p[i] = i + 1;//p[i] 完全等价于 *(p+i)堆内存开辟的空间 连续.可以像数组一样读写
-        printf("p[%d] = %d\n", i, p[i]);
+        printf("p[%d] = %d\n", i, p[i]);printf("p[%d] = %d\n", i, p[i]);
     }
 
     // 释放内存（必须做）
@@ -21,3 +21,9 @@ int main () {
     p = NULL; // 避免野指针//ree(p) 只是释放内存,指针 p 仍然指向原来的地址,把 p 置空，防止误操作
     return 0;   返回0;
 }
+
+//malloc(字节数)
+//必须检查是否 == NULL
+//指针可以当数组用
+//释放后置 NULL
+//堆内存手动管理,堆内存手动管理
