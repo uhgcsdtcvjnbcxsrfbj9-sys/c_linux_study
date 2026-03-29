@@ -1,0 +1,37 @@
+#include <stdio.h>  
+// 1. 定义回调函数类型
+typedef void (*EventCallback)(int);//这是函数指针类型定义。void：回调函数没有返回值，(*EventCallback)：给函数指针类型起别名。(int)表示：这个函数接收一个 int 类型参数。。。EventCallback = 一种函数指针，能指向 “参数 int、无返回值” 的函数
+//为什么要这样写？（超级关键）
+因为函数指针写法非常复杂、非常丑！
+如果不 typedef，你后面写函数参数必须写成：void event_trigger(int data, void (*cb)(int)
+// 2. 底层模块：只负责触发事件，不关心具体做什么
+void event_trigger(int data, EventCallback cb) {
+    printf("事件触发，data = %d\n", data);
+    if (cb != NULL) {
+        cb(data); // 调用上层传入的回调
+    }//int data：要传递的数据EventCallback cb：接收一个函数指针（回调函数）cb(data)：调用传进来的那个函数
+}
+//原理超级重要：
+底层只管触发
+底层不知道、也不关心你要处理什么逻辑
+你传什么函数进来，它就调用什么！
+这就是回调机制！
+// 3. 上层业务：实现具体回调
+void handle_data(int data) {
+    printf("处理数据：%d * 2 = %d\n", data, data * 2);
+}
+//这是你自己写的业务逻辑
+名字随便取
+逻辑随便写
+只要格式匹配：void func(int)
+这个函数就是回调函数
+
+
+int main()  {
+    // 注册回调并触发
+    event_trigger(10, handle_data);//10：数据handle_data：把你的函数地址传给底层底层拿到后，会回头调用你这个函数 所以叫 回调（Call Back）
+    event_trigger(20, handle_data);
+
+    return 0;   
+}
+//typedef int MyInt;给 int 起名叫 MyInt。
