@@ -1,0 +1,71 @@
+mkdir -p ~/code/linux_study/day{08..14}
+cd ~/code/linux_study
+# 安装线程库（Ubuntu）
+sudo apt install libpthread-stubs0-dev
+
+
+
+#include <stdio.h>//用于 printf 打印。
+#include <stdlib.h>  //用于 exit() 退出程序。
+#include <pthread.h>//线程操作的头文件！pthread 是 POSIX 标准线程库。pthread_create、pthread_join、pthread_exit 都在这里。
+#include <unistd.h>//：用于 sleep() 休眠函数
+
+// 线程函数：返回void*，参数void*
+void* thread_func(void* arg) {
+    int id = *(int*)arg;//原理：把通用指针转回原来的类型。arg 是 void*（通用指针）(int*)arg → 强制转换成 int 指针*(int*)arg → 取出指针指向的 int 值
+作用：拿到主线程传过来的线程 ID（1 或 2）。
+    printf("线程 %d 开始运行\n", id);
+    sleep(2); // 模拟耗时
+    printf("线程 %d 运行结束\n", id);
+    pthread_exit((void*)0); // 线程退出线程退出函数作用：退出当前线程可以返回一个值给主线程写 return 0; 也可以，效果一样
+}
+//1. 为什么返回值是 void*？
+这是 线程函数的固定格式
+void* 表示通用指针，可以返回任意类型数据
+2. 为什么参数是 void* arg？
+线程创建时，可以给线程传任意类型的参数
+void* 通用指针能接收任何地址
+int main()  {//程序运行时，默认先运行 main 函数。main 所在的线程叫 主线程
+    pthread_t tid1, tid2;//pthread_t 是 线程 ID 类型。tid1、tid2 用来保存创建出来的线程 ID，后面操作线程（等待、销毁）都要靠它
+    int arg1 = 1, arg2 = 2;//给线程传参用的参数（线程 1、线程 2）。
+
+    // 创建线程
+    if (pthread_create(&tid1, NULL, thread_func, &arg1) != 0) {//四个参数必须背下来！&tid1输出线程 ID。NULL零线程属性，默认填 NULL。thread_func线程要运行的函数（函数名 = 地址）。&arg1传给线程的参数
+//原理：创建一个新的执行流，和主线程同时运行！
+perror("pthread_create 1");//判断线程是否创建成功失败返回非 0，打印错误并退出。
+        exit(1);  
+    }
+    if (pthread_create(&tid2, NULL, thread_func, &arg2) != 0) {
+        perror("pthread_create 2");
+        exit(1);
+    }
+
+    // 等待线程结束（必须）
+    pthread_join(tid1, NULL);//主线程要等子线程跑完才能结束如果不写：主线程直接结束，整个程序退出，子线程会被强制杀死！
+    pthread_join(tid2, NULL);
+
+    printf("主线程结束\n");
+    return 0;   
+}
+//最核心原理（一定要彻底懂）
+1. 什么是线程？
+线程就是一条独立的 “执行道路”
+一个程序可以同时跑多条道路 → 并发执行
+2. 多线程优势
+同时做多件事
+提高效率
+不阻塞主线程
+3. 线程函数为什么必须是 void*(*func)(void*)
+这是 POSIX 线程标准规定
+通用格式，能传任意参数、返回任意值。
+4. 为什么要 pthread_join
+线程运行需要资源
+不等待 → 线程资源无法释放 → 内存泄漏
+主线程不能提前退出
+五、整个程序执行流程（超级清晰）
+运行 main → 主线程启动
+创建线程 1、线程 2
+两个线程同时开始运行
+主线程调用 pthread_join 等待
+线程 1、线程 2 sleep 2 秒后结束
+主线程继续执行，打印结束
