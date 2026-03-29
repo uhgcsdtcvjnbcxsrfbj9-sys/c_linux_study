@@ -1,0 +1,30 @@
+pthread_create(&tid1, NULL, thread_func, &arg1);
+//这行代码 = 创建一个新线程，让它去跑函数！
+//给我新开一条 “执行路线”
+让它去跑 thread_func 这个函数
+顺便把参数 &arg1 传给它
+//线程创建成功后，系统会生成一个线程编号
+这个编号会存到 tid1 变量里
+你必须传地址 &tid1，系统才能写进去
+//第二个参数：NULL线程属性（优先级、分离状态等）我们新手直接填 NULL = 默认属性
+//第三个参数：thread_func，这是函数名函数名 == 函数的地址意思：新线程创建后，跑去执行这个函数
+//把 arg1 的地址传给线程线程函数里的 arg 会收到这个地址你想给线程传什么数据，都放这里
+
+
+
+void* thread_func(void* arg) {//这是 线程的固定格式，系统强制要求！
+    int id = *(int*)arg;   //arg 是你从主线程传进来的 &arg1 → 地址但它是 void*，系统不知道它是 int 地址所以先强转：(int*)arg → 变成 int 指针再用 * 取值：*(int*)arg → 拿到真正的数字 1 或 2
+    printf("Thread %d starts running\n", id);
+    sleep(2);
+    printf("线程 %d 运行结束\n", id);
+    pthread_exit((void*)0);
+}
+// (void* arg) → 参数类型
+线程只能接收 一个参数
+这个参数必须是 void*（通用指针）
+你可以传 任意地址 进来
+
+void* → 返回值类型
+线程函数必须返回一个 通用指针
+你可以返回任意数据地址
+不想返回就写 (void*)0
