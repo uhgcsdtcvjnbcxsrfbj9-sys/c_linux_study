@@ -1,0 +1,31 @@
+#include <stdio.h>
+#include <string.h>//引入字符串处理库。因为后面要用 strcpy 复制字符串。strcpy 在 string.h 里面。
+
+// 定义结构体
+typedef struct {
+    int id;
+    char name[20];
+    float score;
+} Student;//struct：定义结构体关键字把多个不同类型变量打包在一起，变成一个新类型id：学号（int）name：姓名（char 数组）score：分数（float）typedef：给结构体起别名 Student
+
+int main() {   Int main() {
+    // 定义并初始化
+    Student s1 = {1, "ZhangSan", 95.5};//赋值顺序必须和结构体定义一致
+    Student *p = &s1; // 结构体指针，定义结构体指针 p，指向 s1。
+
+    // 访问方式1：.
+    printf("s1.id = %d\n", s1.id);//结构体变量用 . 访问成员//
+    // 访问方式2：->（指针专用）
+    printf("p->name = %s\n", p->name);//p->name 等价于 (*p).name
+    printf("p->score = %.1f\n", p->score);//%.1f：打印浮点数，保留1 位小数
+
+    // 修改
+    strcpy(p->name, "LiSi");//通过指针直接修改结构体成员//字符串不能直接赋值：p->name = "LiSi" ❌ 错误。必须用 strcpy 复制字符串 ✅ 正确，name 是数组，数组名不能直接赋值。
+    p->score = 88.0;
+    printf("修改后 name: %s, score: %.1f\n", s1.name, s1.score);
+
+    return 0;   
+}
+//结构体是什么？把多个不同类型变量打包成一个新类型比如学生 = 学号 + 姓名 + 分数
+//两种访问方式结构体变量：用 .s1.id。。结构体指针：用 ->p->id
+// 字符串必须用 strcpy 复制name 是数组，不能直接用 = 赋值
