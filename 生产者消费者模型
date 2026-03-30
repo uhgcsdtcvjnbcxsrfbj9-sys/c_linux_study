@@ -1,0 +1,74 @@
+#include <stdio.h>   //打印输出 printf
+#include <stdlib.h>   //作用：标准库函数支持
+#include <pthread.h>   //线程、互斥锁、条件变量 都需要这个头文件
+#include <unistd.h>   //sleep 休眠函数
+
+#define BUF_SIZE 5//定义缓冲区大小为 5。表示仓库最多放 5 个数据
+int buffer[BUF_SIZE];//数组：缓冲区（仓库）。用来存放生产者放入的数据
+int in = 0, out = 0;//in：下一个放数据的位置。out：下一个取数据的位置。用 in   在 和 out 判断缓冲区 空 / 满
+
+pthread_mutex_t mutex;//互斥锁保证只有一个线程操作缓冲区。防止数据错乱
+pthread_cond_t not_full, not_empty;//条件变量。not_full：缓冲区不满 → 生产者可以放数据。not_empty：缓冲区不空 → 消费者可以取数据
+
+// 生产者
+void* producer(void* arg) {//生产者线程
+    int id = *(int*)arg;   int 型的 id 等于 *(int*)arg 的值；//取出主线程传过来的 生产者编号（1）
+    for (int i = 0; i < 10; i++) {
+        pthread_mutex_lock(&mutex);//加锁。保证只有生产者能操作缓冲区。其他线程必须等待
+        // 等待缓冲区非满
+        while ((in + 1) % BUF_SIZE == out) {//判断缓冲区是否满了，公式：(in + 1) % 5 == out。如果满了 → 进入循环等待
+            pthread_cond_wait(&not_full, &mutex);//等待条件：缓冲区不满。作用：解锁（让别人能用锁）阻塞等待，（休眠，直到被唤醒）被唤醒后，自动重新加锁。
+            //把锁 mutex 解开，让线程睡觉（阻塞等待），被别人叫醒后，自动重新把锁 mutex 锁上。这三件事是原子的，一步完成，不会出错！
+        }
+
+        buffer[in] = i;/把数据 i 放入缓冲区
+        printf("生产者 %d 放入：%d\n", id, i);
+        in = (in + 1) % BUF_SIZE;//in 向后移动一位循环队列，到末尾自动回到 0
+
+        pthread_cond_signal(&not_empty); // 唤醒消费者
+        pthread_mutex_unlock(&mutex);
+        sleep(1);
+    }
+    pthread_exit(NULL);   
+}
+
+// 消费者
+void* consumer(void* arg) {
+    int id = *(int*)arg;   
+    for (int i = 0; i < 10; i++) {
+        pthread_mutex_lock(&mutex);;
+
+        // 等待缓冲区非空
+        while (in == out) {//in == out 表示空
+            pthread_cond_wait(&not_empty, &mutex);//空了就休眠，等待生产者唤醒
+        }
+
+        int data = buffer[out];
+        printf("消费者 %d 取出：%d\n", id, data);
+        out = (out + 1) % BUF_SIZE;
+
+        pthread_cond_signal(&not_full); // 唤醒生产者 //唤醒生产者。告诉生产者：缓冲区有空位了，可以生产了
+        pthread_mutex_unlock(&mutex);
+        sleep(2);
+    }
+    pthread_exit(NULL);   
+
+int main()  {
+    pthread_mutex_init(&mutex, NULL);pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&not_full, NULL);
+    pthread_cond_init(&not_empty, NULL);// 初始化条件变量 not_empty，使用默认属性。
+
+    pthread_t prod, cons;
+    int p_id = 1, c_id = 1;
+
+    pthread_create(&prod, NULL, producer, &p_id);pthread_create(&prod, NULL, producer, &p_id);  // 创建生产者线程
+    pthread_create(&cons, NULL, consumer, &c_id);pthread_create(&cons, NULL, consumer, &c_id);  // 创建一个消费者线程，将 c_id 的地址作为参数传递给 consumer 函数。
+
+    pthread_join(prod, NULL);  // 等待 prod 线程结束，忽略其
+    pthread_join(cons, NULL); // 等待 cons 线程结束，忽略返回值
+
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&not_full);销毁互斥锁 not_full 。
+    pthread_cond_destroy(&not_empty);销毁互斥锁 not_empty 。
+    return 0;   
+}
