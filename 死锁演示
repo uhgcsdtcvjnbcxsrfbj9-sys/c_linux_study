@@ -1,0 +1,64 @@
+#include <stdio.h>   //：提供 printf 打印功能。
+#include <pthread.h>   //所有线程、锁函数都必须包含它。
+#include <unistd.h>   //提供 sleep 休眠功能。
+
+pthread_mutex_t mutexA, mutexB;//定义两把互斥锁mutexA锁A。mutexB 锁 B全局锁，所有线程都能用
+
+void* thread1(void* arg) { //固定格式：线程函数入口
+    pthread_mutex_lock(&mutexA);//给 锁 A 加锁 线程 1 现在 持有锁 A
+    sleep(1); // //休眠 1 秒。目的：故意让线程2先拿到锁B
+    pthread_mutex_lock(&mutexB);//线程 1 想拿锁B。但此时锁B已经被线程 2 拿走了。线程 1 卡住等待锁 B
+    printf("线程1：同时持有A和B\n");
+    pthread_mutex_unlock(&mutexB);
+    pthread_mutex_unlock(&mutexA);
+    pthread_exit(NULL); //线程结束，无返回值
+}
+
+void* thread2(void* arg) {
+    pthread_mutex_lock(&mutexB);
+    sleep(1);
+    pthread_mutex_lock(&mutexA);
+    printf("线程2：同时持有B和A\n");
+    pthread_mutex_unlock(&mutexA);
+    pthread_mutex_unlock(&mutexB);
+    pthread_exit(NULL);   pthread_exit(空);
+}
+
+int main () {
+    pthread_mutex_init(&mutexA, NULL);//初始化两把锁，才能使用
+    pthread_mutex_init(&mutexB, NULL);
+
+    pthread_t t1, t2;
+    pthread_create(&t1, NULL, thread1, NULL);//创建线程 1，跑 thread1 函数
+    pthread_create(&t2, NULL, thread2, NULL);//创建线程 2，跑 thread2 函数
+
+    pthread_join(t1, NULL);//主线程等待两个线程结束。但因为死锁，永远等不到！
+    pthread_join(t2, NULL);
+
+    pthread_mutex_destroy(&mutexA);//销毁锁
+    pthread_mutex_destroy(&mutexB);
+    return 0;   
+}
+//t1 的类型是 pthread_t（线程 ID 编号）
+&t1 是 t1 的地址
+作用：
+线程创建成功后，系统会把线程编号存到 t1 里
+为什么传地址？
+因为函数要修改你变量的值，必须传地址！
+第 2 个参数：NULL
+表示线程属性
+新手永远写 NULL
+意思：
+用系统默认属性（优先级、栈大小等全部自动）
+不用管，直接写 NULL 永远没错！
+第 3 个参数：thread1
+最重要！
+这是函数名
+函数名 == 函数的地址
+意思：
+新线程创建后，跑去执行 thread1 这个函数
+第 4 个参数：NULL
+传给线程的参数
+线程函数 void* arg 会收到这个值
+这里写 NULL：
+我不给线程传任何数据
