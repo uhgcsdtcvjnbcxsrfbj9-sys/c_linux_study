@@ -1,0 +1,123 @@
+#include <stdio.h>//printf、fgets 输入输出都靠它
+#include <stdlib.h>  //exit() 退出程序需要它。
+#include <string.h>   //memset() 清空内存、strcmp() 比较字符串需要它。
+#include <unistd.h>   //close() 关闭 socket 需要它。
+#include <sys/socket.h>  网络编程核心头文件，socket()、connect()、send()、recv() 都在这里。
+#include <netinet/in.h>  //定义 struct sockaddr_in（存放 IP + 端口 的结构体）。
+#include <arpa/inet.h>   //inet_addr() IP 转换、htons() 端口转换需要它。
+
+#define PORT 8888   定义服务器端口，客户端必须和服务器端口一样才能连接。
+#define BUF_SIZE 1024   消息缓冲区大小发消息、收消息的数组大小。
+
+int main()  {
+    // 1. 创建socket
+    int client_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_fd == -1) {
+        perror("socket"); 
+        exit(1);   //如果创建失败，打印错误并退出。
+    }
+
+    // 2. 连接服务器
+    struct sockaddr_in server_addr;//结构体作用：存放服务器的 IP + 端口
+    memset(&server_addr, 0, sizeof(server_addr));清空结构体，防止脏数据干扰
+    server_addr.sin_family = AF_INET;使用 IPv4 地址格式，必须和服务器一致。
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // 本地
+
+    if (connect(client_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("connect");
+        close(client_fd);
+        exit(1);   //连接失败：打印原因、关闭 socket、退出程序。
+    }
+    printf("连接服务器成功\n");
+
+    // 3. 收发数据
+    char send_buf[BUF_SIZE], recv_buf[BUF_SIZE];//char send_buf[BUF_SIZE], recv_buf[BUF_SIZE];
+    while (1) {
+        printf("输入消息（quit退出）：");
+        fgets(send_buf, BUF_SIZE, stdin);//从键盘读取你输入的消息，存入 send_buf。
+        if (strcmp(send_buf, "quit\n") == 0) break;//如果输入 quit，退出循环，断开连接。
+
+
+        send(client_fd, send_buf, strlen(send_buf), 0);
+        memset(recv_buf, 0, BUF_SIZE);。
+        recv(client_fd, recv_buf, BUF_SIZE-1, 0);
+        printf("服务器回复：%s", recv_buf);
+    }
+
+    // 4. 关闭
+    close(client_fd);   
+    return 0;   
+}
+//int client_fd = socket(AF_INET, SOCK_STREAM, 0);
+创建一个客户端网络插座
+相当于给自己买一部手机。
+为什么必须写？
+程序不能直接上网，必须向操作系统申请一个网络通信工具。
+AF_INET：使用 IPv4 协议
+SOCK_STREAM：使用 TCP 可靠传输（打电话式）
+0：自动选择 TCP 协议
+返回值：
+client_fd
+操作系统给你的 手机编号
+以后发消息、收消息都用它。
+server_addr.sin_port = htons(PORT);
+设置服务器端口 8888
+为什么用 htons？
+电脑存储数字的顺序叫 主机序
+网络传输数字的顺序叫 网络序
+必须用 htons() 转换
+不转端口就错了，连不上服务器！
+server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+设置服务器 IP
+127.0.0.1 = 本机
+客户端必须知道 服务器在哪
+为什么用 inet_addr？
+把字符串 IP 转为网络能识别的格式。
+if (connect(client_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
+这个函数是什么？
+主动向服务器发送连接请求
+相当于 你给服务器打电话！
+三个参数：
+client_fd：你的手机（socket）
+&server_addr：对方的地址（IP + 端口）
+sizeof(...)：地址长度
+原理：
+操作系统发送 TCP 连接请求
+服务器 accept () 会收到
+连接成功返回 0
+失败返回 -1
+为什么必须写 connect？
+客户端必须主动连接，不像服务器等着别人连。
+send(client_fd, send_buf, strlen(send_buf), 0);
+把消息发送给服务器
+相当于 对着电话说话。
+四个参数：
+client_fd：通信线路
+send_buf：要发的消息
+strlen(send_buf)：消息长度
+0：默认标记
+memset(recv_buf, 0, BUF_SIZE);
+清空接收缓冲区
+防止旧消息干扰。
+recv(client_fd, recv_buf, BUF_SIZE-1, 0);
+等待服务器回复消息
+相当于 听电话里的声音。
+原理：
+如果服务器没发消息，recv 会卡住等待
+收到消息后存入 recv_buf
+close(client_fd);
+关闭 socket，断开连接
+相当于 挂电话
+客户端只有 4 步：
+socket() → 买手机
+connect() → 给服务器打电话
+send()/recv() → 聊天
+close() → 挂电话
+最关键 3 个为什么：
+必须 socket
+程序不能直接上网，要申请通信工具
+必须 connect
+客户端要主动找到服务器
+send/recv 必须成对
+发一条、收一条，才能通信
