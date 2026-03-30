@@ -1,0 +1,90 @@
+#include <stdio.h>作用：printf 打印、输入输出
+#include <stdlib.h>  作用：malloc、free、exit固定搭配：动态内存、退出程序
+#include <string.h>   作用：memset 清空内存。固定搭配：清空数组、结构体
+#include <unistd.h>   作用：close 关闭 socket。固定搭配：关闭文件、socket
+#include <sys/socket.h>   作用：网络核心头文件包含：socket、bind、listen、accept、recv、send
+#include <netinet/in.h>  作用：定义 struct sockaddr_in（IP + 端口结构体）。固定搭配：IPv4 网络编程必须加
+#include <arpa/inet.h>   作用：inet_ntoa、htons IP / 端口转换。固定搭配：网络地址处理必须加
+#include <pthread.h>   作用：多线程头文件包含：pthread_create、pthread_detach、pthread_exit。固定搭配：多线程程序必须加
+
+#define PORT 8888   #定义端口8888//定义服务器端口。固定用法：端口号用宏定义，方便修改
+#define BUF_SIZE 1024   #define 缓冲区大小 1024//消息缓冲区大小。固定用法：收发消息用数组大小
+
+// 线程函数：处理客户端连接
+void* handle_client(void* arg) {
+    int client_fd = *(int*)arg;//arg 是主线程传过来的 client_fd 地址(int*)arg：强制转换成 int 指针*(int*)arg：取出指针里的值作用：拿到和客户端通信的 socket
+    free(arg); // 释放堆内存知识点：主线程用 malloc 申请的内存。线程用完必须 释放，否则内存泄漏
+    pthread_detach(pthread_self()); // 线程分离，自动回收
+
+    char buf[BUF_SIZE];   字符缓冲区(BUF_SIZE);
+    while (1) {   While (1) {
+        memset(buf, 0, BUF_SIZE);将 buf 中的元素全部置为 0，大小为 BUF_SIZE。
+        int n = recv(client_fd, buf, BUF_SIZE-1, 0);  // 从客户端套接字接收数据到缓冲区 buf 中，最大接收长度为 BUF_SIZE
+        if (n <= 0) break;If (n <= 0)；
+        printf("线程 %ld 收到：%s", pthread_self(), buf);//打印线程 ID 和收到的消息
+        send(client_fd, "已收到\n", 7, 0);
+    }
+
+    close(client_fd);   
+    printf("线程 %ld 关闭连接\n", pthread_self());
+    pthread_exit(NULL); //结束当前线程
+}
+
+int main(){
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);函数：socket 创建服务器 socket
+    if (server_fd == -1) { perror("socket"); exit(1); }
+
+    struct sockaddr_in server_addr;结构体：存放 IP + 端口。固定搭配！必须用这个结构体！
+    memset(&server_addr, 0, sizeof(server_addr));清空结构体
+    server_addr.sin_family = AF_INET; // 设置协议族为 IPv4
+    server_addr.sin_port = htons(PORT); // 将端口号转换为网络字节序//固定写法！必须转换！
+    server_addr.sin_addr.s_addr = INADDR_ANY;//监听所有网卡 IP
+
+    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {如果（将服务器文件描述符绑定到服务器地址结构体的指针，并指定其大小的操作）返回 -1，则：
+        perror("bind"); close(server_fd); exit(1);
+    }
+
+    if (listen(server_fd, 5) == -1) { perror("listen"); close(server_fd); exit(1); }
+    printf("多线程服务器监听端口 %d...\n", PORT);
+
+    while (1) {   While (1) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        int* client_fd = malloc(sizeof(int));
+        *client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+
+        if (*client_fd == -1) { free(client_fd); continue; }
+        printf("新连接：%s:%d\n",
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port));
+
+        // 创建线程处理
+        pthread_t tid;
+        pthread_create(&tid, NULL, handle_client, client_fd);
+    }
+
+    close(server_fd);
+    return 0;   
+
+掌握：多线程并发服务器模型
+理解：pthread_detach（线程分离）
+能同时处理多个客户端连接
+监听 8888 端口
+同时接受多个客户端连接
+来一个客户端，创建一个线程专门服务它
+主线程继续等待新连接
+pthread_self()：获取自己线程 ID
+pthread_detach()：线程分离   pthread_detach(): Thread Detachment
+作用：线程结束后，自动释放资源，不用主线程回收
+固定搭配：多线程服务端必写
+    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind"); close(server_fd); exit(1);perror("bind"); close(server_fd); exit(1);
+    }
+函数：bind 绑定 IP + 端口
+固定搭配！服务器第二步！
+作用：给服务器设置地址
+    if (listen(server_fd, 5) == -1) { perror("listen"); close(server_fd); exit(1); }
+函数：listen 监听连接
+固定搭配！服务器第三步！
+5：最大等待连接数
+
