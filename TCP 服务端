@@ -1,0 +1,132 @@
+#include <stdio.h> //提供 printf 打印、输入输出功能。
+#include <stdlib.h>  //提供 exit() 退出程序功能。
+#include <string.h>  //提供 memset() 内存清空功能。
+#include <unistd.h>  //提供 close() 关闭文件（socket）功能。
+#include <sys/socket.h>//核心！ 提供 socket 相关函数：socket()、bind()、listen()、accept()、recv()、send()
+#include <netinet/in.h>  //定义 struct sockaddr_in 结构体（存放 IP 和端口）。
+#include <arpa/inet.h>  提供 IP 转换函数 inet_ntoa()、端口转换 htons()。
+
+#define PORT 8888//定义端口号：服务器监听 8888 端口。
+#define BUF_SIZE 1024   //定义缓冲区大小：接收消息用的数组大小。
+
+int main () {
+    // 1. 创建 socket（相当于买一部手机）
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);//AF_INET：使用 IPv4 地址。SOCK_STREAM：使用 TCP 协议（可靠传输）0：默认协议//server_fd 是一个文件描述符，
+    if (server_fd == -1) {
+        perror("socket");
+        exit(1);  //创建失败则打印错误，退出程序。
+    }
+
+    // 2. 绑定地址和端口（给手机插卡、设置号码）
+    struct sockaddr_in server_addr;//结构体作用：存放 IP + 端口 + 协议。
+    memset(&server_addr, 0, sizeof(server_addr));//清空结构体，防止脏数据。
+    server_addr.sin_family = AF_INET;//使用 IPv4。
+    server_addr.sin_port = htons(PORT); //设置端口 8888。htons() = 主机字节序 → 网络字节序。（必须转换，否则端口不对）
+    server_addr.sin_addr.s_addr = INADDR_ANY; 监听所有网卡 IP（本机所有 IP 都能连接这个服务器）
+
+    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {如果（将服务器文件描述符绑定到服务器地址结构体的指针，并指定其大小的操作）返回 -1，则：
+        perror("bind");   
+        close(server_fd);   
+        exit(1);  
+    }
+//bind () 作用：把 IP + 端口 绑定到 server_fd 上。失败则关闭 socket，退出。
+    // 3. 监听
+    if (listen(server_fd, 5) == -1) {//5：最大等待连接数
+        perror("listen");
+        close(server_fd);
+        exit(1);  //listen () 作用：让服务器进入监听状态，等待客户端连接。
+    }
+    printf("服务器监听端口 %d...\n", PORT);
+
+    // 4. 接受连接。 接受客户端连接（接电话）
+    struct sockaddr_in client_addr;//保存客户端 IP 和端口。
+    socklen_t client_len = sizeof(client_addr);//结构体长度
+    int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);//accept () 作用：阻塞等待客户端连接，直到有人连接才继续。返回值 client_fd：和客户端通信的专属 socket（专属通话线路）。
+    if (client_fd == -1) {
+        perror("accept");
+        close(server_fd);
+        exit(1);   //连接失败处理。
+    }
+    printf("客户端连接：%s:%d\n",
+           inet_ntoa(client_addr.sin_addr),
+           ntohs(client_addr.sin_port));
+//打印客户端 IP 和端口：inet_ntoa()：网络 IP → 字符串格式（如 127.0.0.1）。ntohs()：网络端口 → 主机端口
+    // 5. 收发数据
+    char buf[BUF_SIZE];//接收数据的缓冲区。
+    while (1) {//无限循环，一直收发消息。
+        memset(buf, 0, BUF_SIZE);//清空缓冲区，防止旧数据干扰。
+        int n = recv(client_fd, buf, BUF_SIZE-1, 0);//recv () 作用：接收客户端发来的数据，存到 buf 里。返回值 n：接收的字节数。n <= 0：客户端断开连接
+        if (n <= 0) break;//客户端断开，退出循环。
+        printf("收到：%s", buf);//打印收到的消息
+        send(client_fd, "已收到\n", 7, 0);//send () 作用：给客户端回复消息：“已收到”。
+    }
+
+    // 6. 关闭
+    close(client_fd);
+    close(server_fd);
+    return 0;  
+}
+//掌握：socket/bind/listen/accept/connect/recv/send
+理解：大端 / 小端、htons/ntohs/inet_addr
+能独立写出：TCP 单连接客户端 + 服务端
+
+服务器 6 步：
+socket() 创建手机
+bind() 插卡设置号码
+listen() 开机等待
+accept() 接电话
+recv() / send() 通话
+close() 挂电话
+
+socket()：创建通信端点
+bind()：绑定 IP + 端口
+listen()：监听连接
+accept()：等待客户端连接
+recv()：接收数据
+send()：发送数据
+
+
+//int server_fd = socket(AF_INET, SOCK_STREAM, 0);//程序本身不能直接上网，必须向操作系统申请一个网络设备，这个函数就是申请设备。返回值server_fd。→ 操作系统给你的手机编号。以后操作网络都靠它。
+//bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));//把 IP 地址 + 端口号 绑定到 socket 上，。客户端必须知道 IP + 端口 才能找到你
+你必须告诉操作系统：
+“我要在这个 IP、这个端口上等连接！
+必须绑定的东西
+IP：哪台机器
+Port：哪个程序（端口）
+让 socket 进入 “监听状态”
+相当于手机开机，等待别人打电话。
+为什么要这样写？
+socket 创建完、绑定完 还不能接收连接
+必须调用 listen 告诉操作系统：
+“我现在要等别人连接！”
+第二个参数 5 是什么？
+最多同时等待连接的人数
+int client_fd = accept(...);
+等待并接受一个客户端连接
+相当于有人打电话来，你按下接听键。
+为什么要这样写？
+服务器必须等待客户端主动连接
+accept 会一直卡住不动，直到有人连接
+返回值 client_fd 是什么？
+和客户端专属的通信线路
+就像专属通话通道
+以后收发数据都用它
+int n = recv(client_fd, buf, BUF_SIZE-1, 0);
+从客户端读取数据
+相当于听电话里对方说什么。
+为什么要这样写？
+数据不会自动跑到程序里
+必须主动调用 recv 去接收
+返回值 n
+n > 0：收到了 n 字节数据
+n == 0：客户端挂电话了
+n < 0：出错
+send(client_fd, "已收到\n", 7, 0);
+是什么？
+给客户端发送数据
+相当于你对着电话说话。
+为什么要这样写？
+想回复客户端，必须主动发送。
+服务器必须先创建、绑定、监听，才能接受连接
+accept 会阻塞，直到客户端来连接
+recv 和 send 用来真正收发消息
