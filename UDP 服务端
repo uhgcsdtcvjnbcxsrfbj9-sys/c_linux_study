@@ -1,0 +1,284 @@
+#include <stdio.h>提供 printf 打印功能。
+#include <stdlib.h>//提供 exit() 退出程序功能。
+#include <string.h>//提供 memset() 清空内存功能。
+#include <unistd.h>//提供 close() 关闭 socket 功能。
+#include <sys/socket.h>//网络编程核心头文件包含：socket、bind、recvfrom、sendto
+#include <netinet/in.h>//定义 struct sockaddr_in（存放 IP + 端口）
+#include <arpa/inet.h>//提供 IP 转换函数 inet_ntoa、端口转换 htons
+
+#define PORT 8888//定义服务器端口号 8888。客户端必须访问这个端口才能找到你。
+#define BUF_SIZE 1024//定义接收 / 发送消息的数组大小
+
+int main() {
+    int server_fd = socket(AF_INET, SOCK_DGRAM, 0); // UDP。//socket () 函数作用向操作系统申请一个网络通信工具。知识点 2：三个参数
+AF_INET
+使用 IPv4 地址（最常用）
+SOCK_DGRAM
+✅ 最重要！
+代表 UDP 协议（发短信、无连接）
+TCP 用的是 SOCK_STREAM
+0
+server_fd 是 socket 文件描述符
+自动选择协议
+    if (server_fd == -1) { perror("socket"); exit(1); }
+    struct sockaddr_in server_addr;//这是一个固定结构体，专门存放：
+协议类型
+IP 地址
+端口号
+//struct sockaddr_in这是一个固定的类型（就像 int、char 一样）。它是系统定义好的，用来存放 IP + 端口
+第二部分：变量名（叫什么）。server_addr。这是你自己起的名字
+    memset(&server_addr, 0, sizeof(server_addr));//清空结构体防止里面有脏数据，导致绑定失败。
+    server_addr.sin_family = AF_INET;//固定写法！表示使用 IPv4 协议。//sin_family 是什么？它是固定名字，系统规定的！作用：告诉系统，我用的是 IPv4 地址！
+    server_addr.sin_port = htons(PORT);//设置端口号 8888
+知识点：htons () 作用
+主机字节序 → 网络字节序
+必须转换，否则端口不对
+固定写法！
+    server_addr.sin_addr.s_addr = INADDR_ANY;//监听本机所有 IP 地址
+不管哪个网卡发来数据，都接收。
+服务器固定写法！
+server_addr
+├── sin_family    （协议）
+├── sin_port      （端口）
+└── sin_addr      ← 这是一个【小结构体】，专门放IP
+③ .s_addr
+右边：INADDR_ANY 是什么？
+是 sin_addr 里面的一个变量
+类型：32 位整数
+真正存储 IP 地址的地方
+NADDR_ANY = 0.0.0.0
+意思：本机所有可用 IP 地址
+你的电脑可能有多个 IP：
+127.0.0.1（本机）
+192.168.1.100（局域网）
+10.0.0.5（另一个网卡）
+写 INADDR_ANY
+= 全部监听，哪个 IP 发消息都接收
+
+    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind"); close(server_fd); exit(1);
+    }//知识点：bind () 作用
+把 IP + 端口 绑定到 server_fd 上
+相当于：
+给手机设置号码，别人才能找到你
+UDP 必须 bind 吗？
+必须！
+不然客户端不知道往哪发消息。
+如果 “绑定 IP 和端口” 这件事失败了，就执行错误处理。
+1. 先看函数整体格式
+bind 是固定 3 个参数，必须这样写，不能改：
+bind(
+    你的socket,
+    地址结构体,
+    地址结构体的大小
+);
+第一个参数：server_fd
+server_fd
+它是 socket() 创建出来的服务器插座
+相当于你的手机编号
+告诉系统：我要把地址绑到这个 socket 上
+第二个参数：(struct sockaddr)&server_addr*
+这是最难、最关键的地方！
+① &server_addr
+server_addr 是存放 IP + 端口的结构体
+& 取地址符
+&server_addr = server_addr 的内存地址
+② (struct sockaddr*)
+这是强制类型转换
+系统规定的！固定写法！必须写！
+因为 bind 函数只认 struct sockaddr 这种类型
+但我们用的是 struct sockaddr_in
+所以必须强转一下
+第三个参数：sizeof (server_addr)
+sizeof() = 计算占用多少字节
+告诉系统：我传进去的地址结构体有多大
+系统必须知道大小才能正确读取数据
+固定写法！
+
+    printf("UDP服务器监听端口 %d...\n", PORT);//UDP 最关键：没有 listen () 和 accept ()！，UDP 不需要连接！不需要监听！不需要接受连接！直接收发数据！
+
+    char buf[BUF_SIZE];//接收消息的缓冲区数组
+    struct sockaddr_in client_addr;保存客户端的 IP + 端口。收到消息时，自动填进去//定义一个 “用来存放【客户端 IP 地址 + 端口号】的变量，名字叫 client_addr”
+struct sockaddr_in
+这是一个系统定义好的结构体类型
+作用：专门存放 IPv4 地址 + 端口号
+client_addr
+这是你给变量起的名字
+    socklen_t client_len = sizeof(client_addr);//地址长度，固定写法
+socklen_t
+这是一个类型！
+它不是关键字，是系统定义的
+专门用来表示地址长度
+你可以理解成：专门存长度的整数类型
+固定用法！必须写 socklen_t！
+ client_len
+这是变量名，你自己起的！
+sizeof(client_addr)
+sizeof(...) = 计算 括号里的东西占多少字节
+client_addr 是存放客户端 IP + 端口的结构体
+    while (1) {
+        memset(buf, 0, BUF_SIZE);//清空数组，防止上次的消息干扰这次。
+把 buf 这块数组里的所有字节，全部设置成 0（清空）。
+buf
+目标数组名
+你要清空的那块内存的起始位置
+这里就是：接收消息的字符数组 buf
+② 0
+要填充的值
+这里填 0，就是清空、擦干净
+③ BUF_SIZE
+要填充多少个字节
+你定义的：#define BUF_SIZE 1024
+意思：把整个 1024 字节全部清 0
+        // 接收UDP数据
+        int n = recvfrom(server_fd, buf, BUF_SIZE-1, 0,
+                        (struct sockaddr*)&client_addr, &client_len);//作用：接收客户端发来的 UDP 消息。相当于收到短信。
+recvfrom(
+    套接字,
+    接收缓冲区,
+    最大接收长度,
+    标记位(一般写0),
+    客户端地址结构体,
+    地址长度变量
+);
+服务器的 socket
+相当于 “接收消息的手机”
+告诉系统：从哪个 socket 接收数据
+buf
+字符数组
+用来存放收到的数据
+相当于 “装消息的盒子”
+BUF_SIZE - 1
+最多接收多少字节
+为什么 -1？
+给字符串结束符 \0 留位置，防止溢出
+0
+标志位
+默认写 0 就可以
+不用管，固定写法
+(struct sockaddr*)&client_addr
+用来保存【发送方的 IP + 端口】
+&client_addr：取变量地址
+(struct sockaddr*)：系统强制要求的格式转换
+调用后，client_addr 里自动装满客户端地址！
+&client_len
+client_len 是结构体大小
+必须传地址，系统会自动修改它
+固定写法！
+int n = recvfrom(...)
+n = 实际收到了多少字节数据
+n > 0：成功收到 n 字节
+n = 0：对方断开
+n < 0：出错
+翻译：
+在 server_fd 上等待 UDP 消息，
+收到后放进 buf 数组，
+最多接收 BUF_SIZE-1 字节，
+同时把发送方的 IP 和端口保存到 client_addr 里，
+最后返回实际收到的数据长度 n。
+        if (n <= 0) break;
+        printf("收到来自 %s:%d：%s",
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port), buf);
+//打印：收到来自 【IP 地址】:【端口号】：【消息内容】
+printf 打印时，% 开头的是占位符，后面变量会填进去：
+%s = 打印字符串（如 IP、文本）
+%d = 打印整数（如端口号）
+inet_ntoa(client_addr.sin_addr)
+作用：把网络格式的 IP → 转成我们能看懂的字符串 IP
+例如：
+把内部数字 → 转成 192.168.1.100
+client_addr.sin_addr：客户端 IP
+inet_ntoa()：IP 转换函数（固定用】
+ntohs(client_addr.sin_port)
+作用：把网络格式的端口 → 转成正常数字
+client_addr.sin_port：客户端端口
+ntohs()：端口转换函数（固定用）
+buf
+就是我们用 recvfrom 收到的消息内容
+        
+        sendto(server_fd, "UDP已收到\n", 11, 0,
+               (struct sockaddr*)&client_addr, client_len);
+    }
+//通过 UDP 协议，给刚才发消息的客户端，回复一句：“UDP 已收到”
+先记住：sendto 是 UDP 专用发送函数
+TCP 用 send
+UDP 用 sendto
+server_fd
+服务器的 socket
+意思：从哪个网络通道发送
+固定写服务器的 socket
+"UDP已收到\n"
+要发送的消息内容
+字符串
+你可以改成任何内容
+11
+要发送的数据长度（字节数）
+为什么是 11？
+UDP已收到 → 6 个汉字 = 12 字节？
+实际计算：
+U D P 已 收 到 \n → 一共占 11 字节
+0
+标志位
+默认写 0，不用管
+固定写法
+(struct sockaddr*)&client_addr
+要发给谁？（目标地址）
+client_addr 里保存了客户端的 IP + 端口
+这是 recvfrom 自动帮你存好的
+所以：
+发给刚才给我发消息的那个客户端
+&client_addr：取地址
+(struct sockaddr*)：系统强制格式转换
+client_len
+地址结构体的长度
+sendto(
+    server_fd,      // 从哪个socket发
+    "UDP已收到\n",  // 发什么内容
+    11,             // 内容长度
+    0,              // 默认
+    地址,           // 发给谁
+    长度            // 地址长度
+);
+sendto 是 UDP 发送专用函数
+必须指定对方 IP 和端口（client_addr）
+和 recvfrom 一一对应
+
+
+    close(server_fd);//关闭网络通信释放系统资源
+    return 0;
+}
+
+
+UDP 服务器 完整 6 步流程
+第 1 步：创建 UDP 插座（买手机）
+int server_fd = socket(AF_INET, SOCK_DGRAM, 0);
+作用：向操作系统申请一个 UDP 通信工具
+SOCK_DGRAM 代表 UDP
+得到 server_fd → 相当于手机号
+第 2 步：定义地址（填快递单）
+struct sockaddr_in server_addr;
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(PORT);
+server_addr.sin_addr.s_addr = INADDR_ANY;
+作用：准备好 IP + 端口
+让服务器可以被别人找到
+第 3 步：绑定地址（插卡开机）
+bind(server_fd, ..., ...);
+作用：把 IP + 端口 绑定到 socket
+别人才能给你发消息
+UDP 必须 bind！
+第 4 步：循环等待接收消息（等短信）
+while(1) {
+服务器永远运行
+第 5 步：接收 UDP 消息（收短信）
+recvfrom(..., buf, ..., &client_addr, ...);
+阻塞等待客户端发消息
+收到后存在 buf 里
+自动记录客户端 IP + 端口
+知道是谁发的
+第 6 步：回复消息（发短信）
+sendto(..., "已收到", ..., &client_addr, ...);
+直接回复给刚才发消息的客户端
+不需要提前建立连接
+发完就走
