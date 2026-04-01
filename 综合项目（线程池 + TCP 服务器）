@@ -1,0 +1,249 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+stdio.h：输入输出 printf
+stdlib.h：退出 exit
+string.h：memset 清空
+unistd.h：close 关闭
+sys/socket.h：TCP 网络通信核心
+netinet/in.h：地址结构体
+arpa/inet.h：IP 转换
+pthread.h：多线程、线程池必备
+#define PORT 8888//服务器端口号
+#define BUF_SIZE 1024//#define BUF_SIZE 1024
+#define THREAD_NUM 4//线程池大小：4 个工作线程
+#define QUEUE_SIZE 1024//任务队列最多放 1024 个客户端连接
+
+// 任务队列
+typedef struct {
+    int conn_sock;
+} Task;
+一个任务 = 一个客户端连接
+conn_sock = 客户端 socket
+Task task_queue[QUEUE_SIZE];
+int queue_head = 0, queue_tail = 0;
+task_queue：任务队列数组
+head：队头（取任务）
+tail：队尾（放任务）
+pthread_mutex_t queue_mutex;
+pthread_cond_t queue_cond;
+mutex：锁 → 防止多个线程同时改队列
+cond：条件变量 → 没任务时线程睡觉，有任务叫醒
+// 线程函数：从队列取任务处理
+void* worker_thread(void* arg) {//工作线程函数（工人干活）
+    while (1) {
+        pthread_mutex_lock(&queue_mutex);加锁，防止多人同时操作任务队列
+
+        // 等待任务
+        while (queue_head == queue_tail) {
+            pthread_cond_wait(&queue_cond, &queue_mutex)队列为空 → 没活干，线程睡觉等待，有人添加任务 → 自动叫醒
+        }
+
+        // 取任务
+        Task task = task_queue[queue_head];//从任务队列的 “队头” 取出一个任务（一个客户端），交给当前线程去处理。
+        queue_head = (queue_head + 1) % QUEUE_SIZE;// 队头往后挪一位，表示这个任务已经被取走了；而且用 % 取模，让队列变成环形，不会越界。**
+
+        pthread_mutex_unlock(&queue_mutex);
+
+        // 处理客户端
+        int client_fd = task.conn_sock;//task = 当前线程拿到的 “任务”。里面装着要处理的客户端。conn_sock 是什么？conn = connection（连接）sock = socket（套接字）conn_sock = 客户端连接的唯一编号（门牌号）
+操作系统用这个数字找到对应的客户端
+        char buf[BUF_SIZE];
+        memset(buf, 0, BUF_SIZE);
+        int n = recv(client_fd, buf, BUF_SIZE-1, 0);
+        if (n > 0) {
+            printf("线程 %ld 处理：%s", pthread_self(), buf);
+            send(client_fd, "线程池已处理\n", 13, 0);
+        }
+        close(client_fd);
+    }
+    pthread_exit(NULL);
+}
+
+// 添加任务到队列
+void add_task(int conn_sock) {
+    pthread_mutex_lock(&queue_mutex);
+
+    // 队列满则丢弃（简单处理）
+    if ((queue_tail + 1) % QUEUE_SIZE == queue_head) {
+        close(conn_sock);
+        pthread_mutex_unlock(&queue_mutex);
+        return;
+    }
+
+    task_queue[queue_tail].conn_sock = conn_sock;
+    queue_tail = (queue_tail + 1) % QUEUE_SIZE;
+
+    pthread_cond_signal(&queue_cond);
+    pthread_mutex_unlock(&queue_mutex);
+}
+
+int main() {
+    // 初始化锁和条件变量
+    pthread_mutex_init(&queue_mutex, NULL);
+    pthread_cond_init(&queue_cond, NULL);
+
+    // 创建线程池
+    pthread_t tids[THREAD_NUM];
+    for (int i = 0; i < THREAD_NUM; i++) {
+        pthread_create(&tids[i], NULL, worker_thread, NULL);
+    }
+pthread_t
+这是 Linux 系统里线程的编号类型。
+就像每个人有身份证号，每个线程也有一个 pthread_t 类型的 ID。
+THREAD_NUM
+你前面定义的：#define THREAD_NUM 4
+意思是：线程池里一共有 4 个工人。
+pthread_create(...)
+这是创建线程的函数。
+调用它，系统就会凭空多出一个新的执行流（一个新工人）。
+pthread_t：线程 ID 类型。
+tids：thread IDs（线程 ID 数组）。
+[THREAD_NUM]：长度为 4。
+意思：
+创建一个长度为 4 的数组，用来存放这 4 个线程的身份证号。
+① for (...) 循环
+循环 4 次（i 从 0 到 3）。
+目的：批量创建 4 个线程，不用写 4 遍重复代码。
+② pthread_create(...) 核心函数
+这个函数有 4 个参数，我一个一个讲：
+&tids[i]
+把创建好的线程 ID，存放到刚才的数组 tids 里。
+相当于：给新工人发身份证。
+NULL
+线程属性，默认写 NULL，不用管。
+worker_thread
+最重要！
+线程创建好后，去执行哪个函数？
+这里填 worker_thread，意思是：
+新线程启动后，立刻跑去执行 worker_thread 这个函数。
+NULL
+传给线程的参数，这里没有，填 NULL。
+3. 整段代码合起来的运行流程
+程序执行到这里。
+准备好 4 个位置存线程 ID (tids[4])。
+开始第 1 次循环：
+创建线程 #1 -> 存 ID -> 跑去执行 worker_thread
+开始第 2 次循环：
+创建线程 #2 -> 存 ID -> 跑去执行 worker_thread
+开始第 3 次循环：...
+开始第 4 次循环：...
+循环结束。
+此时，系统里已经有 4 个新线程在跑了！
+    // 创建监听socket
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1) { perror("socket"); exit(1); }
+
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind"); close(server_fd); exit(1);
+    }
+
+    if (listen(server_fd, 5) == -1) { perror("listen"); close(server_fd); exit(1); }
+    printf("线程池TCP服务器启动，端口 %d，线程数 %d\n", PORT, THREAD_NUM);
+
+    // 主循环：接受连接并添加任务
+    while (1) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+
+        if (client_fd == -1) continue;
+        printf("新连接：%s:%d\n",
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port));
+
+        add_task(client_fd);
+    }
+句话总概括
+** 主线程只负责接客户端，接进来就扔进任务队列；
+4 个工作线程自己去队列里取客户端、处理、回复、关闭。**
+整个程序运行流程（从头到尾）
+1. 程序启动，先做准备工作
+定义端口 8888、缓冲区 1024、线程池 4 个线程、任务队列长度 1024
+创建一个任务队列，用来放客户端连接
+创建一把锁：防止多个线程同时抢任务
+创建一个条件变量：没任务时线程睡觉，有任务再叫醒
+2. 创建 4 个工作线程（工人）
+for (int i = 0; i < 4; i++)
+    pthread_create(... worker_thread ...);
+这 4 个线程启动后，立刻进入循环：
+看任务队列有没有任务
+没有任务 → 睡觉
+有任务 → 取出来处理
+它们只干活，不接客。
+3. 主线程创建 TCP 服务器（老板）
+创建 TCP 套接字
+绑定 8888 端口
+调用 listen 开始监听客户端
+主线程现在变成一个专职接客的服务员。
+4. 主线程进入死循环：只做一件事
+while(1) {
+    client_fd = accept(...);  // 等客户端连接
+    add_task(client_fd);      // 扔进任务队列
+}
+流程：
+有客户端来连接 → accept 接住
+打印客户端 IP 和端口
+把这个客户端扔进任务队列
+立刻回去继续接下一个客户端
+主线程永远不处理消息，只负责接客 + 排队。
+5. 客户端被扔进任务队列时发生什么
+add_task 做的事：
+加锁（防止多个线程同时改队列）
+把客户端 client_fd 放进队列
+调用 pthread_cond_signal 叫醒一个睡觉的线程
+解锁
+6. 工作线程被叫醒，开始处理
+某个睡觉的工人线程被叫醒：
+加锁
+从队列取出一个客户端
+解锁
+调用 recv 接收客户端发的消息
+打印：线程 xxx 处理：xxx
+调用 send 回复：线程池已处理
+调用 close 关闭客户端连接
+处理完成，回到循环继续等下一个任务
+7. 处理完一个，线程继续睡觉
+处理完后，线程再次查看队列：
+有任务 → 继续处理
+没任务 → 继续睡觉，不占 CPU
+8. 不断重复……
+主线程：接客户端 → 扔队列 → 接客户端 → 扔队列……
+工作线程：取任务 → 处理 → 睡觉 → 取任务……
+这就是线程池高并发服务器的标准模型。
+最形象的比喻（一辈子不忘）
+主线程 = 餐厅迎宾
+只管开门接人，接进来就领去排队
+任务队列 = 等候区
+4 个工作线程 = 4 个服务员
+没人时坐着休息，有人就过去点菜、上菜、送走
+锁 = 排队叫号机
+防止多个服务员抢同一个客人
+条件变量 = 铃铛
+来客人了叮铃一响，服务员就起来干活
+ultra 精简流程总结（必背）
+开 4 个工人线程，全部睡觉等活
+主线程开服务器，专门接客户端
+接一个客户端，扔进任务队列
+叫醒一个工人线程
+工人取客户端 → 收消息 → 回复 → 关闭
+工人继续等下一个任务
+如果你愿意，我可以再给你画一张
+“主线程 vs 4 个工作线程” 时间轴流程图
+一眼看懂多线程是怎么同时跑的
+    close(server_fd);
+    pthread_mutex_destroy(&queue_mutex);
+    pthread_cond_destroy(&queue_cond);
+    return 0;
+}
