@@ -1,0 +1,284 @@
+#include <stdio.h>//提供 printf 打印、fgets 读取输入
+#include <stdlib.h>//提供 exit() 退出程序。
+#include <string.h>//提供 memset() 清空、strcmp() 比较。
+#include <unistd.h>//提供 close() 关闭 socket。
+#include <sys/socket.h>//UDP 核心头文件。提供 socket()、sendto()、recvfrom()。
+#include <netinet/in.h>//提供地址结构体 struct sockaddr_in。
+#include <arpa/inet.h>//作用：提供 inet_addr() IP 转换、htons() 端口转换。
+
+#define PORT 8888//服务器端口，必须和服务器一致。
+#define BUF_SIZE 1024//消息缓冲区大小。
+
+int main() {
+    int client_fd = socket(AF_INET, SOCK_DGRAM, 0);//AF_INET：IPv4 协议
+SOCK_DGRAM：UDP 协议（发短信）
+返回值 client_fd：客户端插座编号
+    if (client_fd == -1) { perror("socket"); exit(1); }
+
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+先拆函数：memset 是什么？
+memset = memory set
+意思：批量设置一段内存的值
+它的作用只有一个：
+把一块内存区域，全部填成同一个值（这里是 0）。
+2. 逐参数详细解读
+memset 固定 3 个参数，一个都不能少：
+① &server_addr
+server_addr：存放服务器 IP + 端口的结构体
+&：取地址符
+&server_addr：取这个结构体的起始地址
+告诉 memset：从哪里开始清空
+② 0
+要设置的值
+这里写 0
+意思：全部清空为 0
+③ sizeof(server_addr)
+sizeof()：计算变量占多大内存（多少字节）
+sizeof(server_addr)：计算这个地址结构体有多大
+告诉 memset：要清空多大范围
+    server_addr.sin_family = AF_INET;
+server_addr
+这是一个结构体变量
+作用：存放服务器的 IP 地址 + 端口号
+你可以把它理解成一个小盒子
+② . （点）
+结构体成员访问符号
+意思：“里面的”
+比如：盒子.东西
+③ sin_family
+固定名字，系统规定死的
+意思：地址家族 / 协议类型
+它决定了你用 IPv4 还是 IPv6
+④ AF_INET
+固定常量，系统定义好的
+代表 IPv4 协议
+我们现在所有网络编程都用这个！
+    server_addr.sin_port = htons(PORT);
+给服务器地址设置端口号，并且转换成网络能识别的格式
+1. 逐段拆开讲（超级重要）
+① server_addr
+这是一个存放【服务器 IP + 端口】的结构体变量
+你可以理解成：一个装地址的盒子
+② . （点）
+结构体成员符号
+意思：盒子里面的
+③ sin_port
+固定名字，系统规定
+意思：端口号
+专门用来存放服务器的端口
+④ =
+赋值符号：把右边的值放进左边
+⑤ htons(PORT)
+这是最关键、必须懂的函数！
+htons = Host TO Network Short
+意思：把本机数字 → 转换成网络能识别的数字
+必须写！不写就通信失败！
+⑥ PORT
+你定义的端口：8888
+服务器和客户端必须用同一个端口才能通信
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+server_addr
+结构体变量（装服务器 IP + 端口的盒子）
+② .sin_addr
+盒子里专门放IP 地址的子盒子
+类型：struct in_addr
+③ .s_addr
+子盒子里真正存 IP 的地方
+是一个 32 位整数，电脑只认识数字
+2. 再看右边：inet_addr("127.0.0.1")
+① "127.0.0.1"
+这是字符串格式的 IP（人能看懂）
+意思：本机（自己电脑）
+② inet_addr( )
+函数名：IP 地址转换函数
+全称：Internet Address
+作用：
+把人看的字符串 IP → 转换成电脑能识别的数字 IP
+
+    char send_buf[BUF_SIZE], recv_buf[BUF_SIZE];//
+** 定义两个字符数组：
+一个用来【发送消息】，一个用来【接收消息】。**
+1. 逐部分拆开讲解
+① char
+字符类型
+表示这里存放的是文字、字符串、消息
+② send_buf
+变量名（你自己起的）
+send = 发送
+buf = buffer（缓冲区 / 临时存放区）
+意思：发送缓冲区 → 存要发出去的消息
+③ [BUF_SIZE]
+[] 表示这是数组
+BUF_SIZE 是你定义的大小：1024
+意思：数组长度是 1024 个字节
+能存 1024 个字符
+④ recv_buf
+recv = receive（接收）
+buf = 缓冲区
+意思：接收缓冲区 → 存收到的消息
+    while (1) {
+        printf("输入UDP消息（quit退出）：");
+        fgets(send_buf, BUF_SIZE, stdin);
+从键盘读取你输入的一行文字，存到 send_buf 数组里。
+1. 函数是什么？
+fgets = file get string
+意思：从某个地方读取一行字符串
+这里不是读文件，而是读键盘输入！
+2. 逐参数详细解读（固定 3 个参数）
+① send_buf
+存放数据的地方
+就是你刚才定义的：发送消息缓冲区
+你输入的文字会存到这里
+② BUF_SIZE
+最多读取多少个字符
+你定义的是 1024
+意思：最多读 1024 个字符，防止溢出
+③ stdin
+意思：标准输入
+就是键盘输入
+固定写 stdin 代表从键盘读
+        if (strcmp(send_buf, "quit\n") == 0) break;
+逐部分拆开讲解
+① if (...)
+如果
+用来做条件判断
+满足条件就执行大括号里的代码
+② strcmp(A, B)
+字符串比较函数
+全称：string compare
+作用：比较 A 和 B 两个字符串是否完全一样
+③ strcmp(send_buf, "quit\n")
+比较两个内容：
+send_buf：你刚才键盘输入的内容
+"quit\n"：固定字符串 quit
+返回值有三种可能：
+等于 0 → 两个字符串一模一样
+大于 0 → A 比 B 大
+小于 0 → A 比 B 小
+④ == 0
+意思是：两个字符串完全相等
+也就是：你输入的就是 quit
+⑤ break
+跳出循环
+直接结束 while(1) 无限循环
+程序就会退出关闭
+
+        // 发送UDP数据
+        sendto(client_fd, send_buf, strlen(send_buf), 0,
+               (struct sockaddr*)&server_addr, sizeof(server_addr));
+通过 UDP 协议，把我输入的消息，发送给指定的服务器！
+1. 先记住：这是 UDP 专用发送函数
+TCP 用 send
+UDP 必须用 sendto
+sendto 固定 6 个参数，一个都不能少！
+第 1 个参数：client_fd
+client_fd
+这是你用 socket() 创建的 UDP 客户端套接字
+意思：我要通过这个客户端来发送消息
+send_buf
+这是存放消息的字符数组
+里面是你键盘输入的内容
+意思：我要发送的数据在这里
+strlen(send_buf)
+strlen()：计算字符串有效长度（多少个字节）
+意思：告诉系统，我要发出去的消息有多长
+不发多余的空间，只发实际输入的内容
+0
+标志位
+默认写 0，不用管，固定写法
+(struct sockaddr*)&server_addr
+最重要！目标地址（发给谁？）
+&server_addr：服务器的 IP + 端口
+(struct sockaddr*)：系统强制要求的格式转换（固定写法）
+意思：把消息发给这个 IP 和端口的服务器
+服务器地址结构体的大小
+系统需要知道地址有多大才能正确发送
+固定写法
+sendto(
+    client_fd,      // 用哪个客户端发
+    send_buf,       // 发什么消息
+    strlen(send_buf), // 消息多长
+    0,              // 默认
+    &server_addr,   // 发给谁（服务器IP+端口）
+    大小            // 地址长度
+);
+因为 UDP 无连接！
+每次发消息都必须明确告诉系统：发给谁？IP？端口？
+        // 接收回复
+        memset(recv_buf, 0, BUF_SIZE);
+        recvfrom(client_fd, recv_buf, BUF_SIZE-1, 0, NULL, NULL);
+** 等待服务器回复消息，收到后存到 recv_buf 数组里。
+因为我只等服务器回复，所以不关心发送方地址，写 NULL 就行！**
+client_fd
+客户端 socket
+意思：从哪个客户端接收消息
+固定写你创建的 UDP 客户端套接字
+recv_buf
+接收消息的字符数组
+服务器回复的内容会存到这里
+相当于消息接收盒
+BUF_SIZE - 1
+最多接收多少字节
+为什么 -1？
+给字符串结束符 \0 留位置，保证字符串正常显示
+固定写法：最大长度 - 1
+0
+标志位
+默认写 0，不用管，固定写法
+NULL
+用来存放发送方地址的参数
+客户端这里只等服务器回复，不需要记录对方地址
+所以直接写 NULL（表示不需要）
+NULL
+用来存放地址长度的参数
+因为上一个参数是 NULL，这里也写 NULL
+ecvfrom(
+    client_fd,      // 从哪个客户端收
+    recv_buf,       // 收到的数据放哪里
+    BUF_SIZE-1,     // 最多收多长
+    0,              // 默认
+    NULL,           // 不保存发送方地址
+    NULL            // 不保存地址长度
+);
+
+        printf("服务器回复：%s", recv_buf);
+    }
+
+    close(client_fd);
+    return 0;
+}
+UDP 客户端整体流程（一句话版）
+创建 UDP 插座 → 填好服务器地址 → 循环发消息 → 等服务器回复 → 关闭退出
+创建 UDP 套接字
+int client_fd = socket(AF_INET, SOCK_DGRAM, 0);
+向系统申请一个UDP 通信工具
+SOCK_DGRAM 代表 UDP
+得到 client_fd 相当于 “客户端编号”
+2. 配置服务器地址（IP + 端口）
+struct sockaddr_in server_addr;
+memset(&server_addr, 0, sizeof(server_addr));
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(8888);
+server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+告诉客户端：要连接谁？
+必须填对：服务器 IP + 端口
+3. 进入循环，准备不断发消息
+while(1) {
+无限循环，直到输入 quit 才退出
+4. 从键盘读取要发送的消息
+fgets(send_buf, BUF_SIZE, stdin);
+等待你输入文字
+存入发送缓冲区 send_buf
+5. 发送 UDP 消息给服务器
+sendto(client_fd, send_buf, ..., &server_addr, ...);
+UDP 无连接，每次发送都要指定服务器地址
+直接把消息发给目标服务器
+6. 等待并接收服务器回复
+recvfrom(client_fd, recv_buf, ..., NULL, NULL);
+阻塞等待服务器回信
+收到后存入 recv_buf
+客户端不需要记录地址，所以写 NULL
+7. 关闭套接字，退出程序
+close(client_fd);
+通信结束，释放资源
