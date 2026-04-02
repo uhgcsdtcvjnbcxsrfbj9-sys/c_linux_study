@@ -1,0 +1,102 @@
+#include <stdio.h>// 输入输出，printf
+#include <signal.h>//信号机制必备头文件（signal、SIGINT 都在这里）
+#include <unistd.h>//sleep 函数
+
+void handler(int sig) {
+    printf("catch sig %d\n", sig);
+}
+
+int main() {
+    signal(SIGINT, handler);
+
+    while (1) {
+        printf("running...\n");
+        sleep(1);
+    }
+    return 0;
+}
+先记住一句最核心的总概括（超级重要）
+** 信号 = 操作系统给进程发的 “通知”
+进程收到信号，可以选择：忽略、默认处理、自己处理！
+这段代码：按 Ctrl+C 不退出，而是打印一句话！**
+先搞懂 4 个最基础概念
+信号（Signal）
+系统发给进程的简单通知（比如：你被打断了、你出错了、该退出了）。
+没有数据，只有一个编号。
+SIGINT
+信号名：中断信号
+就是你按 Ctrl+C 时发的信号。
+signal () 函数
+注册信号处理函数
+告诉系统：收到这个信号，别按默认处理，调用我写的函数。
+handler () 函数
+信号来了之后，自动执行的函数。
+
+
+信号处理函数（核心）
+void handler(int sig) {
+知识点 + 原理：
+handler：函数名，随便起（一般叫 handler/sig_handler）
+int sig：系统传进来的参数
+→ 收到的信号编号
+作用：收到信号时，系统自动调用这个函数
+一句话：
+这是信号的 “处理方案”
+
+printf("catch sig %d\n", sig);
+打印：捕获到信号
+%d 打印信号编号
+SIGINT 的编号是 2
+所以按 Ctrl+C 会打印：catch sig 2
+
+signal(SIGINT, handler);
+一句话翻译：
+告诉操作系统：
+当我这个程序收到 SIGINT 信号时，
+不要按默认方式杀掉程序，
+而是去调用我自己写的 handler 函数。
+第一个参数：SIGINT
+它是什么？
+一个信号的名字
+全称：Signal Interrupt
+意思：中断信号
+什么时候触发？
+→ 你在键盘按 Ctrl+C
+默认行为：
+程序直接退出、死掉。
+第二个参数：handler
+它是什么？
+是一个函数的名字
+
+while (1) {
+        printf("running...\n");
+        sleep(1);
+    }
+知识点：
+while(1)：死循环，让程序一直跑
+printf：每秒打印一次 running
+sleep(1)：暂停 1 秒
+作用：
+让程序一直运行，等待你按 Ctrl+C 发信号
+
+整个程序运行流程（最清晰版）
+程序启动
+注册 SIGINT 信号处理函数
+→ 告诉系统：收到 Ctrl+C 别杀我，调用 handler
+进入死循环，每秒打印 running...
+你按 Ctrl+C
+系统给进程发 SIGINT 信号
+进程自动调用 handler
+打印 catch sig 2
+回到循环继续运行
+不会退出！
+
+
+. 你按 Ctrl+C 时发生了什么？
+程序正在 while(1) 里面循环
+你按 Ctrl+C
+系统触发信号，调用你的 handler 函数
+handler 打印一句话
+handler 执行完，回到 while 循环继续跑！
+重点：
+信号处理函数执行完，会回到原来被打断的地方继续执行！
