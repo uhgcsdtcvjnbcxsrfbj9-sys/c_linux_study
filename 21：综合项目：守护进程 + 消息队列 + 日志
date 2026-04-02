@@ -1,0 +1,305 @@
+#include <stdio.h>//输入输出：fopen, fprintf, fclose
+#include <stdlib.h>//exit, 标准库
+#include <unistd.h> fork, setsid, sleep
+#include <sys/msg.h>消息队列：msgget, msgsnd, msgrcv
+#include <time.h>//时间：time, ctime（写日志用）
+#include <string.h>// 字符串操作
+
+struct msg {
+    long type;
+    char buf[64];
+};
+
+void log_write(const char *msg) {
+    FILE *fp = fopen("/tmp/ipc.log", "a");
+    time_t now = time(NULL);
+    fprintf(fp, "%s %s\n", ctime(&now), msg);
+    fclose(fp);
+}
+
+int main() {
+    if (fork() != 0) return 0;
+    setsid();
+
+    key_t key = 0x1234;
+    int msqid = msgget(key, IPC_CREAT | 0666);
+
+    if (fork() == 0) {//第二次 fork 的唯一目的：让守护进程彻底 “绝对安全”，永远不会再绑定终端！
+        while (1) {
+            struct msg m = {1, "data from child"};//1 → 消息类型（收消息时可以指定只收类型 1）
+            msgsnd(msqid, &m, sizeof(m.buf), 0);
+            sleep(2);
+        }
+        return 0;
+    }
+
+    while (1) {
+        struct msg m;
+        msgrcv(msqid, &m, sizeof(m.buf), 1, 0);
+        log_write(m.buf);
+    }
+
+    return 0;
+}
+
+第一次 fork：爹死，儿活（B）
+第二次 fork：儿（B）再生一个（C）
+B 负责收消息
+C 负责发消息
+两个同时后台永远运行
+
+1.定义消息结构体（消息队列固定格式）
+struct msg {
+    long type;       // 【必须】消息类型（用来区分、取消息）
+    char buf[64];    // 消息内容（真正要传的数据）
+};
+知识点 + 原理：
+消息队列强制要求：第一个成员必须是 long type
+type：取消息时可以指定 “我只取类型为 1 的消息”
+buf：存放要传递的字符串（这里最多 64 字节）
+
+
+
+
+2. 日志写入函数（核心工具）
+void log_write(const char *msg) {
+功能：
+把字符串 + 系统时间，写入 /tmp/ipc.log 文件
+    FILE *fp = fopen("/tmp/ipc.log", "a");
+fopen：打开文件
+/tmp/ipc.log：日志文件路径
+"a"：追加模式（不覆盖原有内容，继续往后写）
+    time_t now = time(NULL);
+获取当前系统时间戳
+    fprintf(fp, "%s %s\n", ctime(&now), msg);
+ctime(&now)：把时间戳转成可读时间（如：Thu Apr 2 12:00:00 2026）
+写入格式：时间 消息内容
+    fclose(fp);
+}
+关闭文件，保证内容写入磁盘
+作用：
+后台程序不能打印屏幕，所以把运行记录写进文件！
+
+
+4. 第一次 fork + 父进程退出（守护进程第一步）
+    if (fork() != 0) return 0;
+知识点 + 原理：
+fork()：创建子进程
+父进程（fork 返回 > 0）直接退出
+只留下子进程继续运行
+目的：
+甩掉终端父进程，变成孤儿进程，被系统接管
+
+setsid ()（守护进程核心：脱离终端）
+    setsid();
+知识点 + 原理：
+set session id：创建新会话
+彻底断开与终端的连接
+关掉终端，程序不会死！
+
+
+6. 创建消息队列 key
+    key_t key = 0x1234;
+知识点 + 原理：
+key：消息队列的编号 / 房间号
+父子进程用同一个 key → 找到同一个消息队列
+
+
+7. 创建 / 打开消息队列
+    int msqid = msgget(key, IPC_CREAT | 0666);//创建 / 打开一个消息队列，并拿到它的 “操作号”
+知识点 + 原理：
+msgget：获取消息队列 ID
+IPC_CREAT：不存在则创建
+0666：权限（所有用户可读写）
+msqid：队列的操作 ID（后续收发都用它）
+因为 msgget 必须要一个 “编号 / 名字” 才能找到消息队列！
+key 就是这个编号！没有它，msgget 不知道你要找哪个队列！
+
+
+8.第二次 fork：创建 “发送子进程”
+    if (fork() == 0) {
+再创建一个子进程（专门用来发消息）
+子进程：循环发送消息
+  9.while (1) {  // 死循环，一直发
+            struct msg m = {1, "data from child"};
+构造消息：
+type = 1
+内容 = "data from child"
+            msgsnd(msqid, &m, sizeof(m.buf), 0);
+msgsnd：发送消息到队列
+参数：队列 ID、消息地址、数据长度、标志（0 默认）
+            sleep(2);  // 每2秒发一次
+        }
+        return 0;
+    }
+这个子进程的工作：
+后台死循环，每 2 秒往队列发一条消息
+这个子进程的工作：
+后台死循环，每 2 秒往队列发一条消息
+
+
+10. 父进程：循环接收消息 + 写日志
+    while (1) {  // 死循环，一直收
+        struct msg m;
+定义变量，存放收到的消息
+        msgrcv(msqid, &m, sizeof(m.buf), 1, 0);
+核心中的核心：
+msgrcv：从队列接收消息
+参数：
+msqid：队列 ID
+&m：接收缓存
+sizeof(m.buf)：最大数据长度
+1：只接收类型为 1 的消息（精准接收）
+0：默认标志
+        log_write(m.buf);
+把收到的消息写入日志文件
+    }
+    return 0;
+}
+这个父进程的工作：
+后台死循环，阻塞等待消息，收到就写日志
+
+
+ 整个程序运行流程（最清晰版）
+运行程序
+第一次 fork → 父进程退出（终端立刻回到命令行）
+setsid() → 彻底脱离终端
+创建消息队列（key=0x1234）
+第二次 fork：
+子进程：每 2 秒发一条消息到队列
+父进程：一直等队列消息，收到就写日志
+程序全程后台运行，关掉终端不死
+日志保存在 /tmp/ipc.log
+
+
+
+先搞懂：fork() 是什么？
+fork() = 生儿子
+调用 fork() 一瞬间：
+一个进程变成两个进程！
+原来的进程 → 父进程
+新出来的 → 子进程
+2. fork() 的返回值（最核心原理）
+父进程 和 子进程 拿到的返回值不一样！
+在 父进程 里：fork() 返回 大于 0 的数字（儿子的 PID）
+在 子进程 里：fork() 返回 0
+3. 拆解这一行：
+if (fork() != 0)
+    return 0;
+第一步：执行 fork()
+生成一个子进程
+现在有两个进程同时跑这行代码
+第二步：判断返回值
+父进程拿到返回值 > 0
+→ !=0 条件成立
+→ 执行 return 0
+→ 父进程直接结束、死掉！
+子进程拿到返回值 = 0
+→ !=0 条件不成立
+→ 不执行 return
+→ 子进程活着，继续往下跑代码！
+
+
+struct msg {
+    long type;
+    char buf[64];
+};
+1. 它是干嘛用的？
+你用消息队列给进程发数据，
+系统强制要求：
+所有消息必须套在这个结构体里！
+它就像：
+快递必须用快递盒
+信必须用信封
+消息队列 → 必须用 struct msg
+2. 逐字段讲清楚作用
+① long type;
+必须写！必须放在第一个！
+作用：消息类型 / 消息编号
+你可以理解成：
+快递单号 / 消息分类
+收消息时可以指定：
+我只拿类型为 1 的消息！
+消息队列的系统函数：
+msgsnd 发送
+msgrcv 接收
+它们只认识这种结构体！
+你不这么写 → 直接报错、不能用！
+
+
+
+
+第一行：函数定义
+void log_write(const char *msg)
+void：这个函数不返回值
+log_write：函数名，意思是写日志
+const char *msg：要写入的文字内容//只读、不能改，char，字符，*指针，简单理解：指向一段文字的地址。const char *msg = 只读字符串
+比如："data from child"
+第二行：打开文件
+FILE *fp = fopen("/tmp/ipc.log", "a");
+1. fopen
+打开文件的函数（固定用法）
+2. /tmp/ipc.log
+要打开的文件路径
+/tmp/ 是系统临时目录
+ipc.log 是日志文件名
+3. "a"
+最重要！
+a = append = 追加写入
+不会覆盖原来的内容
+每次写，都加在文件最后面
+4. FILE *fp
+文件指针，用来代表这个打开的文件
+第三行：获取当前系统时间
+time_t now = time(NULL);
+time(NULL)：获取当前系统时间
+返回一个数字（时间戳）
+存到 now 里
+第四行：把时间 + 消息写入文件
+fprintf(fp, "%s %s\n", ctime(&now), msg);//fp = 文件指针（地址）→ fprintf 要这个。*fp = 文件内容（数据）→ fprintf 不要这个
+这句最复杂，我拆成 4 部分讲：
+1. fprintf
+往文件里写内容（和 printf 一样，但写给文件）
+2. fp
+写给哪个文件（就是刚才打开的 /tmp/ipc.log）
+3. ctime(&now)
+把时间数字 → 转成人能看懂的时间字符串
+例如：
+plaintext
+Thu Apr  2 15:30:00 2026
+4. msg
+你要记录的日志内容
+例如：
+plaintext
+"data from child"
+最终写入效果：
+plaintext
+Thu Apr  2 15:30:00 2026 data from child
+第五行：关闭文件
+fclose(fp);
+打开文件必须关闭
+保证内容真正写到磁盘里
+不关闭会出问题
+
+
+
+setsid 全称：Set Session ID
+它做 3 件事：
+创建一个新的会话（session）
+让当前进程成为会话组长
+彻底脱离原来的终端
+结果：
+程序从此在后台独立运行，和终端没有任何关系！
+4. 为什么代码里必须写它？
+因为你前面写了：
+if (fork() != 0) return 0; // 父进程退出，只剩子进程
+这个子进程还绑在终端上，终端一关还是会死。
+所以必须加：
+setsid(); // 彻底解绑！
+5. 最终效果（你运行代码就能看到）
+运行程序
+终端立刻回到命令行（父进程退出）
+你关掉终端
+程序还在后台默默运行！
+这就是 setsid() 的功劳！
+
