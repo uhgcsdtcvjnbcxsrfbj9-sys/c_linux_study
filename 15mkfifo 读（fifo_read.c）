@@ -1,0 +1,50 @@
+#include <stdio.h>础输入输出（用不到，但保留也没事）
+#include <fcntl.h>提供 open() 函数（打开文件 / 管道必备）
+#include <unistd.h>：提供 read(), write(), close() 系统调用
+
+int main() {
+    int fd = open("myfifo", O_RDONLY);//open()
+打开一个文件 / 管道
+这里打开的是 命名管道 myfifo
+2. "myfifo"
+管道名字
+必须提前创建：mkfifo myfifo
+3. O_RDONLY
+Read Only
+以只读方式打开管道
+意思：我只负责读数据，不写数据
+4. int fd
+文件描述符
+系统给管道分配的编号
+后面读写都靠它
+打开名为 myfifo 的命名管道，准备只读数据！
+超级关键原理：
+**open () 会阻塞！
+如果没有另一端程序打开写端，这里会一直//等着！**
+    char buf[100];//
+    字符数组
+用来存放读到的数据
+大小 100 字节
+    int n = read(fd, buf, sizeof(buf));
+    read()
+从管道 / 文件读数据
+阻塞等待，直到有数据来
+2. fd
+打开的管道编号
+3. buf
+读到的数据放这里
+4. sizeof(buf)
+最多读 100 字节
+5. n
+实际读到的字节数
+    write(1, buf, n);//write()
+写数据
+2. 1
+文件描述符 1 = 标准输出（屏幕）//把从管道收到的数据，打印到屏幕上！
+3. buf
+要打印的内容
+4. n
+数据长度
+    close(fd);//关闭管道。释放资源
+    return 0;
+}
