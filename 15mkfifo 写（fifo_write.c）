@@ -1,0 +1,31 @@
+#include <stdio.h>基础输入输出（备用）
+#include <fcntl.h>//提供 open() 函数（打开管道必备）
+#include <string.h>//提供 strlen() 计算消息长度
+#include <unistd.h>//作用：提供 write() close() mkfifo()
+这段代码 = 命名管道（FIFO）的【发送端】
+int main() {
+    mkfifo("myfifo", 0666);//
+    mkfifo
+make FIFO
+创建命名管道
+"myfifo"
+管道名字
+相当于创建一个假文件
+0666
+权限：可读可写
+让所有程序都能访问这个管道
+原理：
+管道必须先创建，才能打开通信。
+    int fd = open("myfifo", O_WRONLY);
+    char buf[] = "hello from fifo";
+    write(fd, buf, strlen(buf));
+    close(fd);
+    return 0;
+}
+创建管道 myfifo
+打开管道写端
+→ 这里会等待，直到读端程序运行
+准备消息
+把消息写入管道
+关闭管道
+程序结束
