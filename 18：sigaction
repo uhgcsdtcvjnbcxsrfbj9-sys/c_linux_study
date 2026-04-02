@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
+
+void handler(int sig) {
+    printf("sigaction catch %d\n", sig);
+}
+
+int main() {
+    struct sigaction sa = {0};
+    sa.sa_handler = handler;
+    sigaction(SIGINT, &sa, NULL);
+
+    while (1) pause();
+    return 0;
+}
+
+
+void handler(int sig) {
+    printf("sigaction catch %d\n", sig);
+}
+知识点 + 原理：
+这是信号来了自动执行的函数
+int sig：系统传过来 信号编号
+Ctrl+C 信号是 SIGINT = 2
+所以会打印：sigaction catch 2
+
+struct sigaction sa = {0};
+知识点：
+struct sigaction：Linux 信号处理标准结构体
+sa：变量名
+= {0}：把所有成员初始化为 0（干净安全）
+作用：
+存放 “如何处理信号” 的所有设置
+
+sa.sa_handler = handler;
+知识点：
+sa_handler：结构体成员
+作用：指定信号来了调用哪个函数
+这里赋值 handler
+→ 收到信号 自动调用 handler 函数
+
+
+sigaction(SIGINT, &sa, NULL);
+逐部分拆解：
+sigaction()
+注册 / 修改信号处理方式（升级版 signal）
+SIGINT
+信号：Ctrl+C（中断信号）
+&sa
+信号属性：按 sa 的设置处理
+NULL
+不保存旧属性（不需要）
+整句意思：
+设置 Ctrl+C（SIGINT）信号，收到就调用 handler 函数！
+
+while (1) pause();
+知识点：
+while(1)：死循环，永远执行
+pause()：进程暂停，睡觉
+→ 不占 CPU，等信号
+收到信号 → pause 醒来 → 继续循环 → 又 pause
+作用：
+让程序一直等，直到你按 Ctrl+C
+
+整个程序运行流程（最清晰版）
+程序启动
+定义信号处理结构体 sa
+设置 sa.sa_handler = handler
+注册 SIGINT（Ctrl+C）处理方式
+进入 while(1) pause()
+→ 程序睡觉，等信号
+你按 Ctrl+C
+系统调用 handler
+打印 sigaction catch 2
+回到 pause 继续睡觉
+程序不退出！
