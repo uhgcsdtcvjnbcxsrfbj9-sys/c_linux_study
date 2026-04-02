@@ -1,0 +1,142 @@
+#include <stdio.h>
+#include <sys/ipc.h>//// IPC 进程间通信通用
+#include <sys/msg.h>// IPC 进程间通信通用
+#include <string.h>//
+这些是使用消息队列必须包含的头文件。
+struct msg {
+    long type;
+    char buf[64];
+};
+
+int main() {
+    key_t key = 0x1234;//key_t
+它是一个整数类型（就是一个数字）
+专门用来给 IPC 通道 做编号
+可以理解成：通信通道的身份证类型
+    int msqid = msgget(key, IPC_CREAT | 0666);
+
+    if (fork() == 0) {
+        struct msg m = {1, "hello msg"};
+        msgsnd(msqid, &m, sizeof(m.buf), 0);
+        return 0;
+    }
+
+    sleep(1);
+    struct msg m;
+    msgrcv(msqid, &m, sizeof(m.buf), 1, 0);
+    printf("recv: %s\n", m.buf);
+    msgctl(msqid, IPC_RMID, NULL);
+
+    return 0;
+}
+消息队列（Message Queue）
+系统创建的一个消息链表，进程可以往里面发消息、取消息。
+消息格式
+必须有类型（long type） + 数据内容，系统强制要求！
+msgget
+创建 / 打开消息队列。
+msgsnd / msgrcv
+发送消息 / 接收消息
+
+struct msg {
+    long type;
+    char buf[64];
+};
+知识点 + 原理：
+消息队列强制要求消息格式固定
+第一个成员必须是 long type
+消息类型（用来区分消息，取的时候可以指定取哪种类型）
+第二个成员开始是数据
+buf[64] 存放真正的消息内容
+一句话：
+这就是 “快递包裹格式”
+type = 快递类型
+buf = 包裹内容
+
+key_t key = 0x1234;
+知识点：
+key = 消息队列的编号 / 名字
+多个进程用同一个 key，就能找到同一个消息队列
+这里 0x1234 是自定义编号，随便写，双方一致就行
+原理：
+系统通过 key 区分不同的消息队列。
+key 相同 → 找到同一个队列
+
+int msqid = msgget(key, IPC_CREAT | 0666);
+逐部分拆解：
+msgget
+message get
+创建 or 获取消息队列
+key
+队列编号 0x1234
+IPC_CREAT | 0666
+IPC_CREAT：不存在就创建
+0666：权限（可读可写）
+msqid
+消息队列 ID（操作系统给它的编号）
+
+
+fork() = 分裂成两个进程
+返回 0 → 子进程（发消息）
+父进程直接跳过大括号（收消息）
+
+
+struct msg m = {1, "hello msg"};
+意思：
+创建消息变量 m
+type = 1（消息类型是 1）
+内容 = "hello msg"
+
+
+msgsnd(msqid, &m, sizeof(m.buf), 0);
+msgsnd：发送消息
+msqid：队列 ID
+&m：消息结构体地址
+sizeof(m.buf)：数据长度
+0：默认标志
+整句意思：
+把消息发送到消息队列！
+
+
+return 0;
+子进程发送完成，退出。
+sleep(1);
+等待 1 秒
+保证子进程先把消息发出去
+struct msg m;
+创建收消息的变量。
+msgrcv(msqid, &m, sizeof(m.buf), 1, 0);
+逐部分拆解：
+msgrcv：接收消息
+msqid：队列 ID
+&m：存放消息的地址
+sizeof(m.buf)：最大接收长度
+1：指定接收类型为 1 的消息
+0：默认标志
+整句意思：
+从队列里取出类型为 1 的消息，放进 m 里！
+printf("recv: %s\n", m.buf);
+打印收到的消息。
+msgctl(msqid, IPC_RMID, NULL);
+知识点：
+msgctl：消息队列控制
+IPC_RMID：删除队列
+用完必须删除，否则一直留在系统里
+return 0;
+}
+程序结束。
+🔥 整个程序运行流程（最清晰版）
+创建 key = 0x1234
+创建消息队列
+fork() 分裂成父子两个进程
+子进程：
+构造消息（类型 1，内容 hello msg）
+发送到队列
+退出
+父进程：
+等 1 秒
+接收类型为 1 的消息
+打印内容
+删除消息队列
+结束
+
