@@ -1,0 +1,133 @@
+#include <stdio.h>//输入输出，printf
+#include <sys/ipc.h>/// 进程间通信（IPC）基础
+#include <sys/shm.h>//共享内存（shared memory）
+#include <string.h>//strcpy 字符串拷贝
+
+#include <stdio.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <string.h>
+
+int main() {
+    key_t key = 0x1234;
+    int shmid = shmget(key, 1024, IPC_CREAT | 0666);
+
+    if (fork() == 0) {
+        char *p = shmat(shmid, NULL, 0);
+        strcpy(p, "hello from child");
+        shmdt(p);
+        return 0;
+    }
+
+    sleep(1);
+    char *p = shmat(shmid, NULL, 0);
+    printf("read: %s\n", p);
+    shmdt(p);
+    shmctl(shmid, IPC_RMID, NULL);
+
+    return 0;
+}
+int main() {
+    key_t key = 0x1234;
+key_t 是一种整数类型
+key = 共享内存的 “名字 / 编号”
+多个进程用同一个 key，就能找到同一块共享内存
+这里 0x1234 就是一个自定义编号（随便写）
+系统通过 key 来区分不同的共享内存。
+key 相同 → 找到同一块内存
+    int shmid = shmget(key, 1024, IPC_CREAT | 0666);//
+shmget
+shared memory get
+创建 or 获取共享内存
+key
+刚才的编号：0x1234
+1024
+共享内存大小：1024 字节
+IPC_CREAT | 0666
+IPC_CREAT：如果不存在就创建
+0666：权限（可读可写）
+shmid
+共享内存的 ID（操作系统给它的编号）
+整句意思：
+创建一块 1024 字节、编号为 0x1234 的共享内存
+
+    if (fork() == 0) {//fork()：创建子进程返回 0 → 进入子进程，父进程直接跳过大括号，原理：现在程序变成两个进程：子进程：写共享内存。父进程：读共享内存
+//操作系统把当前进程完整复制了一份：
+代码一样
+变量一样
+打开的文件一样
+内存内容一样
+甚至运行到的位置都一样
+唯一区别：
+原来的叫 父进程
+新复制出来的叫 子进程
+第三步：两个进程同时往下继续运行
+分裂之后，两行代码同时在跑：
+父进程继续跑
+子进程也继续跑
+就像一条路突然分成两条，两个人各走一条。
+3. 最关键问题：怎么区分父子？
+答案：靠 fork () 的返回值！
+fork () 会返回一个数字，父子拿到的数字不一样：
+1）父进程拿到：子进程的 PID（大于 0 的整数）
+2）子进程拿到：0
+
+        char *p = shmat(shmid, NULL, 0);//shmat
+shared memory attach
+把共享内存挂接到当前进程
+shmid
+共享内存编号
+NULL, 0
+默认属性，不用管
+*char p
+一个字符指针
+p 指向共享内存的起始地址
+整句意思：
+把共享内存拉到当前进程，用指针 p 指向它
+        strcpy(p, "hello from child");//strcpy：字符串拷贝
+把字符串 "hello from child"
+直接写入 p 指向的共享内存
+原理：
+共享内存就是一段普通内存，
+直接往里面写数据即可。
+        shmdt(p);//shmdt：shared memory detach
+取消挂接，断开与共享内存的连接
+意思：
+子进程写完了，离开共享内存
+        return 0;//子进程结束
+    }
+
+    sleep(1);//sleep(1)：暂停 1 秒
+等子进程把数据写入共享内存
+保证父进程读的时候数据已经准备好了
+    char *p = shmat(shmid, NULL, 0);//父进程也挂接这块共享内存，用指针 p 指向它
+
+    printf("read: %s\n", p);//意思：
+直接从共享内存里读取数据并打印
+    shmdt(p);//父进程读完，断开连接。
+    shmctl(shmid, IPC_RMID, NULL);shmctl：共享内存控制
+IPC_RMID：删除共享内存
+相当于用完销毁黑板
+意思：
+删除这块共享内存，释放系统资源
+
+    return 0;
+}
+流程：
+创建 key = 0x1234
+创建 1024 字节共享内存
+fork () 分裂成父子两个进程
+子进程：
+挂接共享内存
+写入 "hello from child"
+断开，退出
+父进程：
+等 1 秒
+挂接共享内存
+读取并打印内容
+断开
+删除共享内存
+结束
+
+
+
